@@ -1,0 +1,15 @@
+[package]
+name = "geo_core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "geo_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module"] }
+petgraph = "0.6"
+rstar = "0.11"
+geo = "0.27"
+rayon = "1.8"

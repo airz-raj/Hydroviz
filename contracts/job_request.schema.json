@@ -1,0 +1,60 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "HydroViz Job Request",
+    "type": "object",
+    "required": ["bbox", "event_date"],
+    "properties": {
+        "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Auto-generated if not provided"
+        },
+        "bbox": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 4,
+            "maxItems": 4,
+            "description": "[minLon, minLat, maxLon, maxLat] in WGS84"
+        },
+        "event_date": {
+            "type": "string",
+            "format": "date",
+            "description": "ISO 8601 date of the flood event"
+        },
+        "osm_snapshot": {
+            "type": "string",
+            "format": "date",
+            "default": "2026-07-27",
+            "description": "Must be before event_date"
+        },
+        "options": {
+            "type": "object",
+            "properties": {
+                "cutoff_modes": {
+                    "type": "array",
+                    "items": { "enum": ["road_only", "road_track_path"] },
+                    "default": ["road_only"]
+                },
+                "scenarios": {
+                    "type": "array",
+                    "items": { "enum": ["strict", "conservative"] },
+                    "default": ["strict", "conservative"]
+                },
+                "use_s2": { "type": "boolean", "default": true },
+                "flow_path_origin": {
+                    "oneOf": [
+                        { "type": "null" },
+                        {
+                            "type": "array",
+                            "items": { "type": "number" },
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "description": "[lon, lat] upstream point"
+                        }
+                    ],
+                    "default": null
+                }
+            }
+        }
+    }
+}

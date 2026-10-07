@@ -1,0 +1,5 @@
+fastapi==0.103.1
+uvicorn==0.23.2
+jinja2==3.1.2
+weasyprint==60.1
+pydantic==2.4.2

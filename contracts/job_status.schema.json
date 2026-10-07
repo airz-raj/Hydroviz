@@ -1,0 +1,41 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "HydroViz Job Status",
+    "type": "object",
+    "required": ["job_id", "status"],
+    "properties": {
+        "job_id": {
+            "type": "string",
+            "format": "uuid"
+        },
+        "status": {
+            "type": "string",
+            "enum": ["queued", "ingesting", "processing", "analyzing", "reporting", "complete", "failed"]
+        },
+        "stage": {
+            "type": "string"
+        },
+        "progress": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+        },
+        "stages": {
+            "type": "object"
+        },
+        "partial_results": {
+            "type": "object"
+        },
+        "error": {
+            "type": ["object", "null"]
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "updated_at": {
+            "type": "string",
+            "format": "date-time"
+        }
+    }
+}

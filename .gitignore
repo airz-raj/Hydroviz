@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Rust
+target/
+**/*.rs.bk
+
+# Data & models
+/data/
+*.onnx
+
+# macOS
+.DS_Store

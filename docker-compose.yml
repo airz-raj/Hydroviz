@@ -1,0 +1,173 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hydroviz}
+      POSTGRES_USER: ${POSTGRES_USER:-hydroviz}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hydroviz}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hydroviz} -d ${POSTGRES_DB:-hydroviz}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hydroviz-net
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hydroviz-net
+
+  gateway:
+    build: ./services/gateway
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./services/gateway:/app
+      - ./services/shared:/shared
+      - data-volume:/data
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hydroviz-net
+
+  ingest:
+    build: ./services/ingest
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./services/ingest:/app
+      - ./services/shared:/shared
+      - data-volume:/data
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hydroviz-net
+
+  flood-ml:
+    build: ./services/flood_ml
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./services/flood_ml:/app
+      - ./services/shared:/shared
+      - data-volume:/data
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hydroviz-net
+
+  geo-core:
+    build: ./services/geo_core
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./services/geo_core:/app
+      - ./services/shared:/shared
+      - data-volume:/data
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hydroviz-net
+
+  report:
+    build: ./services/report
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./services/report:/app
+      - ./services/shared:/shared
+      - data-volume:/data
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hydroviz-net
+
+  titiler:
+    image: ghcr.io/developmentseed/titiler:latest
+    ports:
+      - "8080:8000"
+    volumes:
+      - data-volume:/data
+    environment:
+      - TITILER_API_DISABLE_STAC=true
+    networks:
+      - hydroviz-net
+
+  martin:
+    image: ghcr.io/maplibre/martin:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER:-hydroviz}:${POSTGRES_PASSWORD:-hydroviz}@postgres:5432/${POSTGRES_DB:-hydroviz}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - hydroviz-net
+
+volumes:
+  pgdata:
+  data-volume:
+
+networks:
+  hydroviz-net:
+    driver: bridge
