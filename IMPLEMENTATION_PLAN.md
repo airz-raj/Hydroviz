@@ -166,14 +166,16 @@ For any corridor bbox + event date, pick a valid same-track S1 pair (or return `
    - Validate: all 3 must exist; platforms may differ (S-1C/S-1D) if geometry matches
    - If no valid group: try next orbit group → widen window → return `NO_VALID_PAIR`
 
-4. **Implement data fetching:**
+4. **Implement data fetching (Low-RAM Optimized):**
    - Use Sentinel Hub Process API (`/api/v1/process`)
    - Request `GAMMA0_TERRAIN` backscatter, `orthorectify: true`, DEM = Copernicus 30m
    - Bands: VV, VH separately
-   - Output: GeoTIFF, 10m resolution
-   - Tile large areas (max ~2500×2500 px per request — verify limit)
+   - Output: GeoTIFF
+   - **Resolution constraints:** Use 10m resolution by default, but automatically downsample to 20m if the requested AOI exceeds 500 km² to prevent memory overflow.
+   - **Sequential Tiling:** Tile large areas (e.g., 512×512 px chunks). Process these chunks sequentially rather than concurrently to keep peak memory <1GB during ingestion.
+   - **Streaming:** Use `rasterio` windowed reading/writing and set `GDAL_CACHEMAX=512` to prevent GDAL from caching massive arrays in memory.
    - Retry with exponential backoff (3 attempts)
-   - Save as COGs using rasterio
+   - Save as COGs using rasterio with Deflate compression to save disk I/O.
 
 5. **Implement S2 processing:**
    - Search for closest post-event L2A scene
@@ -251,12 +253,13 @@ Log-ratio change detection + terrain masks produce a hazard mask and vector laye
      - Layover: DEM slope > incidence angle on the near side
    - Save all as COGs in `features/`
 
-2. **Preprocessing:**
-   - Apply speckle filter (refined Lee, 7×7 window) to each S1 band
-   - Co-registration check: cross-correlate pre and post, warn if shift > 1 pixel
-   - Build stack: [pre2_VV, pre2_VH, pre1_VV, pre1_VH, post_VV, post_VH] (6 bands)
-   - Add terrain channels: [slope, HAND, shadow_layover] (9 bands total)
-   - Normalise to training data statistics (for M3; for M2 use raw dB)
+2. **Preprocessing (Low-RAM Optimized):**
+   - **Block-wise Processing:** Perform all preprocessing and filtering using `rasterio.windows` block-by-block with a padding margin to prevent edge artifacts.
+   - Apply speckle filter (refined Lee, 7×7 window) to each S1 band per block.
+   - Co-registration check: cross-correlate pre and post, warn if shift > 1 pixel.
+   - Build stack virtually or write block-by-block directly to disk: [pre2, pre1, post] (6 bands).
+   - Add terrain channels: [slope, HAND, shadow_layover] (9 bands total).
+   - Normalise to training data statistics (for M3; for M2 use raw dB).
 
 3. **Log-ratio baseline (M2):**
    - Compute log-ratio: `post_VV_dB - mean(pre1_VV_dB, pre2_VV_dB)` (and same for VH)
@@ -291,86 +294,55 @@ Log-ratio change detection + terrain masks produce a hazard mask and vector laye
 
 ---
 
-## M3 — Learned Model
+## M3 — Learned Model (8GB RAM Optimized)
 
 ### Objective
-Train a segmentation model on Kuro Siwo, export to ONNX, show it beats the baseline on held-out data. Himalayan evaluation numbers recorded.
+Deploy a pre-trained segmentation model (e.g., lightweight U-Net or Prithvi-EO converted to ONNX) to beat the baseline on held-out data, specifically optimized to run within an 8 GB RAM limitation.
 
 ### Files to Create
 
 | File | Content |
 |------|---------|
-| `training/datasets/kuro_siwo.py` | Dataset loader (webdataset format), transforms, splits |
-| `training/datasets/sen1floods11.py` | Optional secondary dataset loader |
-| `training/datasets/himalayan_eval.py` | Weak-label eval set builder |
-| `training/configs/default.yaml` | Hyperparameters, paths, augmentation config |
-| `training/models/unet.py` | U-Net or DeepLabv3+ with terrain channels |
-| `training/train.py` | Training loop: mixed precision, early stopping, logging |
-| `training/eval.py` | Evaluation: per-class IoU, F1, precision, recall, stratified by slope/shadow |
-| `training/export_onnx.py` | Export best checkpoint to ONNX |
-| `training/model_card.md` | Data, licences, metrics, known failure modes |
-| `services/flood_ml/inference.py` | ONNX Runtime sliding-window inference |
+| `services/flood_ml/models/download_weights.py` | Fetches pre-trained ONNX weights (e.g., Sen1Floods11 U-Net) |
+| `services/flood_ml/processors/quantize.py` | Optional script to apply INT8 quantization to ONNX models |
+| `services/flood_ml/inference.py` | ONNX Runtime sliding-window inference with memory chunking |
+| `docs/model_card.md` | Model provenance, licences, metrics, known failure modes |
+| `scripts/evaluate_himalayan.py` | Himalayan evaluation on historical events |
 
 ### Steps
 
-1. **Dataset preparation:**
-   - Download Kuro Siwo benchmark webdataset (verify size first — NOT full 1.33 TB)
-   - Confirm label schema: `{0: no_water, 1: permanent_water, 2: flood}` (verify from repo)
-   - Input channels: VV, VH (×3 timestamps = 6 channels) + terrain (slope, HAND = 8-9 channels)
-   - Split: use provided train/val/test splits
-   - Augmentation: random flip, rotation, crop, brightness jitter; aggressive for mountain domain shift
+1. **Pre-trained Model Procurement:**
+   - Instead of training from scratch, download open-source pre-trained weights (e.g., IBM-NASA Prithvi-EO fine-tuned on Sen1Floods11, or community PyTorch U-Net models).
+   - If in PyTorch format, convert to ONNX opset 17.
+   - Host the ONNX file or use a script (`download_weights.py`) to pull it during container initialization.
 
-2. **Build Himalayan evaluation set:**
-   - Earlier events: Chamoli 2021, Melamchi 2021, South Lhonak 2023
-   - Fetch cloud-free Sentinel-2 for each
-   - Compute NDWI/MNDWI → threshold → weak flood labels
-   - Clearly mark as "weak labels" in all reporting
-   - Verify with organizers this approach is acceptable
+2. **Memory Optimizations (8GB RAM Target):**
+   - **Quantization:** Implement INT8 quantization via `onnxruntime.quantization` to reduce the model size by ~75% while maintaining accuracy.
+   - **Tile Chunking:** Configure `inference.py` to process large inputs in chunks (e.g., 512×512 pixels). Do NOT load entire 2500×2500 scenes into memory at once.
+   - **Garbage Collection:** Enforce aggressive `gc.collect()` in Python workers after processing each chunk.
+   - **Docker Limits:** Update `docker-compose.yml` to apply a hard memory limit of `2g` to the `flood_ml` container to prevent host OOM.
 
-3. **Model architecture:**
-   - Start with U-Net (encoder: ResNet-34 pretrained on ImageNet)
-   - Input: 9 channels (6 SAR + 3 terrain)
-   - Output: 3 classes (no_water, permanent_water, flood)
-   - Alternative: DeepLabv3+ if U-Net underperforms
-   - Loss: weighted cross-entropy + Dice (flood class weighted higher)
+3. **Inference Service Integration:**
+   - Load ONNX model at startup into `onnxruntime.InferenceSession`.
+   - Implement overlapping sliding window inference.
+   - Output: per-pixel class probabilities → argmax → mask.
+   - Apply same post-processing as M2 (remove permanent water, MMU, vectorization).
 
-4. **Training:**
-   - Mixed precision (fp16)
-   - Adam optimizer, cosine annealing LR schedule
-   - Early stopping on validation IoU (patience: 10 epochs)
-   - Log to CSV/TensorBoard
-   - Save best checkpoint
-
-5. **Evaluation:**
-   - Metrics on held-out test set: per-class IoU, F1, precision, recall
-   - Stratify by: slope bins (0-10°, 10-20°, 20-30°, 30°+) and shadow fraction
-   - Compare with M2 baseline on same test set
-   - Himalayan eval set: same metrics with caveat about weak labels
-   - Produce failure case figures: where model disagrees with labels
-
-6. **ONNX export:**
-   - Export with `torch.onnx.export`, opset 17
-   - Verify with ONNX Runtime: same output as PyTorch
-   - Record SHA256 hash in model card
-
-7. **Inference service:**
-   - Load ONNX model at startup
-   - Sliding window: 256×256 (or 512×512), stride = 75% of window
-   - Overlap blending: linear/Gaussian
-   - Output: per-pixel class probabilities → argmax → mask
-   - Apply same post-processing as M2
+4. **Build Himalayan Evaluation Set:**
+   - Earlier events: Chamoli 2021, Melamchi 2021, South Lhonak 2023.
+   - Fetch cloud-free Sentinel-2 for each.
+   - Compute NDWI/MNDWI → threshold → weak flood labels.
+   - Run the optimized ONNX model on these inputs to record Himalayan evaluation numbers.
 
 ### Acceptance Criteria
-- [ ] Model trained, validation IoU > baseline
-- [ ] ONNX export verified
-- [ ] Himalayan evaluation numbers recorded
-- [ ] Model card completed
-- [ ] ONNX inference in flood-ml service matches training output
-- [ ] Failure cases documented with figures
+- [ ] Pre-trained ONNX model successfully loaded without OOM on 8GB host.
+- [ ] Sliding window chunking limits peak memory usage to <2GB per worker.
+- [ ] Himalayan evaluation numbers recorded.
+- [ ] Model card completed.
+- [ ] ONNX inference in flood-ml service matches expected output visually on dashboard.
 
 ### Tests
-- `tests/unit/test_inference.py` — ONNX inference on small synthetic tile
-- `training/eval.py` — generates metrics report automatically
+- `tests/unit/test_inference.py` — ONNX inference on small synthetic tile verifying memory usage.
 
 ---
 
