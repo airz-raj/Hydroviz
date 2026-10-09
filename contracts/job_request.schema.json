@@ -53,7 +53,10 @@
                         }
                     ],
                     "default": null
-                }
+                },
+                "hand_threshold_m": { "type": "number", "default": 15 },
+                "steep_slope_deg": { "type": "number", "default": 20 },
+                "flow_snap_radius_m": { "type": "number", "default": 500 }
             }
         }
     }

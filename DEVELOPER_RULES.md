@@ -31,3 +31,6 @@ The architecture and implementation plan of this project are living documents.
 ## 6. Heuristic and Confidence Tracking
 - Debris detection is heuristic, not a trained ML class.
 - Always append the methodology and filters used to the provenance log via `shared.attribution.add_provenance`. This ensures the final Situation Report accurately reflects what algorithms generated the data.
+
+## 7. Changelog Maintenance
+- After every update via agent, you must update the `CHANGELOG.md` file to reflect the changes made. This ensures the project history remains transparent and up-to-date.
