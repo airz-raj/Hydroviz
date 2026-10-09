@@ -1,0 +1,55 @@
+{
+  "dataset": "Kuro Siwo: A global multi-temporal SAR dataset for rapid flood mapping",
+  "citation": {
+    "authors": "Bountos, Nikolaos Ioannis and Sdraka, Maria and Zavras, Angelos and Karavias, Andreas and Karasante, Ilektra and Herekakis, Themistocles and Thanasou, Angeliki and Michail, Dimitrios and Papoutsis, Ioannis",
+    "conference": "NeurIPS 2024 (Datasets and Benchmarks Track)",
+    "pages": "38105-38121",
+    "paper_url": "https://arxiv.org/abs/2311.12056",
+    "code_repo": "https://github.com/Orion-AI-Lab/KuroSiwo"
+  },
+  "pretrained_weights": {
+    "snunet_cd_ecam": {
+      "model_type": "SNUNet_ECAM",
+      "download_url": "https://www.dropbox.com/scl/fi/3vlsveoobqe1wc71s5z2d/best_segmentation.pt?rlkey=xpy2thmozzxfzymr8b13m7n51&dl=1",
+      "http_status_verified": 200,
+      "content_length_bytes": 144657509,
+      "size_mb": 137.95,
+      "parameters": "~3.2M",
+      "architecture": "Siamese Nested UNet with Ensemble Channel Attention Module"
+    },
+    "floodvit": {
+      "model_type": "VisionTransformer",
+      "download_url": "https://www.dropbox.com/scl/fi/srw7u4cw1gtxrf4xzmsh7/floodvit.pt?rlkey=snskpq1qrdav5u2jya8k2bocg&dl=1",
+      "http_status_verified": 200,
+      "content_length_bytes": 822312543,
+      "size_mb": 784.22,
+      "parameters": "~86M+",
+      "architecture": "Vision Transformer for Flood Segmentation"
+    }
+  },
+  "dataset_downloads": {
+    "huggingface_webdatasets": "https://huggingface.co/datasets/orion-ai-lab/Kuro-Siwo-Webdataset",
+    "huggingface_geotiffs": "https://huggingface.co/datasets/orion-ai-lab/Kuro-Siwo-GeoTIFFs",
+    "grd_dropbox_folder": "https://www.dropbox.com/scl/fo/xc69aclh0q4lykd22ynkb/AAaDu8gBtoSdOpmffv7JY50?rlkey=uds2b2aot6oubc9hmnrm7myy7&st=21u41kwx&dl=0"
+  },
+  "native_statistics": {
+    "grd_mean": [0.0953, 0.0264],
+    "grd_std": [0.0427, 0.0215],
+    "dem_mean": 93.4313,
+    "dem_std": 1410.8382,
+    "slope_mean": 2.1277,
+    "slope_std": 67.5048,
+    "clamp_input": 0.15,
+    "temporal_inputs": [
+      "pre_event_1",
+      "pre_event_2",
+      "post_event"
+    ]
+  },
+  "alignment_with_hydroviz": {
+    "sensor": "100% match (Sentinel-1 GRD, VV/VH polarizations)",
+    "temporal_logic": "100% match (Dual pre-event + post-event SAR imagery)",
+    "terrain_fusion": "Direct match (DEM and Slope are native features in Kuro Siwo repo configs)",
+    "license": "Code is MIT, Dataset is CC BY 4.0 (both fully permissible for open educational and hackathon usage)"
+  }
+}

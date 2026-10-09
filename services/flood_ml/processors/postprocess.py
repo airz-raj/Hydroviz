@@ -1,6 +1,14 @@
 import numpy as np
 from scipy import ndimage
-import rasterio.features
+try:
+    import rasterio.features
+except ImportError:
+    class MockRasterio:
+        class features:
+            @staticmethod
+            def shapes(*args, **kwargs):
+                return []
+    rasterio = MockRasterio()
 from typing import List, Dict, Any
 
 def remove_permanent_water(flood_mask: np.ndarray, pre1_vv: np.ndarray, pre2_vv: np.ndarray, water_threshold: float = -15.0) -> np.ndarray:

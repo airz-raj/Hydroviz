@@ -5,7 +5,10 @@ def select_s1_pair(features: List[Dict[Any, Any]], event_date: str) -> Optional[
     """
     Select 2 pre-event and 1 post-event acquisitions from the same relative orbit and direction.
     """
+    from datetime import timezone
     event_dt = datetime.fromisoformat(event_date.replace('Z', '+00:00'))
+    if event_dt.tzinfo is None:
+        event_dt = event_dt.replace(tzinfo=timezone.utc)
     
     # Group by (relative_orbit, orbit_state)
     groups = {}

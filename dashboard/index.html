@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HydroViz Dashboard</title>
+    <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Sidebar -->
+        <div id="sidebar">
+            <h2>HydroViz</h2>
+            <div class="panel" id="job-form-panel">
+                <h3>Submit Job</h3>
+                <input type="text" id="bbox-input" placeholder="BBox (minLng,minLat,maxLng,maxLat)" value="85.0,27.5,86.5,28.5">
+                <input type="date" id="date-input" value="2026-08-26">
+                <button id="submit-btn">Run Analysis</button>
+            </div>
+            
+            <div class="panel" id="status-panel" style="display: none;">
+                <h3>Job Status</h3>
+                <div id="progress-text">Starting...</div>
+            </div>
+
+            <div class="panel" id="layers-panel">
+                <h3>Layers</h3>
+                <label><input type="checkbox" id="layer-flood" checked> Flood Mask</label><br>
+                <label><input type="checkbox" id="layer-buildings" checked> Exposed Buildings</label><br>
+                <label><input type="checkbox" id="layer-cutoff" checked> Cut-off Settlements</label>
+            </div>
+            
+            <div class="panel" id="report-panel" style="display: none;">
+                <h3>Situation Report</h3>
+                <button id="view-report-btn">View Report</button>
+            </div>
+        </div>
+
+        <!-- Map -->
+        <div id="map"></div>
+        
+        <!-- Attribution -->
+        <div id="attribution">
+            Educational prototype. Contains modified Copernicus Sentinel data 2026. © OpenStreetMap contributors.
+        </div>
+    </div>
+    
+    <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
+    <script src="index.js"></script>
+</body>
+</html>

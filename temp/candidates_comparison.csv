@@ -1,0 +1,9 @@
+Rank,Model Name,Source/Repo,Sensor,Input Channels,Classes,Params,Weights Size,Inference RAM,ONNX Export,Fits 2GB Container,License,Verdict
+1,KuroSiwo SNUNet-CD,Orion-AI-Lab/KuroSiwo,Sentinel-1 GRD (SAR),"2 (VV, VH) x 2 time steps",2 (Change),3.2M,138 MB (12.8 MB state_dict),<200 MB,Yes (Native Ops),Yes,MIT,SELECTED WINNER
+2,SMP U-Net (ResNet-34),qubvel/segmentation_models.pytorch,Configurable (SAR + Terrain),9 channels (Early Fusion),3 classes,24.4M,93 MB (ImageNet enc),~450 MB,Yes (Native Ops),Yes,MIT,VIABLE RUNNER-UP / FALLBACK
+3,ETCI-2021 U-Net,sidgan/ETCI-2021,Sentinel-1 GRD (SAR),"2 (VV, VH) single event",2 (Binary),15-20M,85 MB,~350 MB,Yes,Yes,Open (Unclear),VALUABLE ENCODER DONOR
+4,Uni-Temporal Attentive U-Net,RituYadav92/Frontiers22,Sentinel-1 GRD (SAR),"2 (VV, VH) single event",2 (Binary),12.0M,60 MB,~300 MB,Yes,Yes,Research Use,SECONDARY REFERENCE
+5,KuroSiwo FloodViT,Orion-AI-Lab/KuroSiwo,Sentinel-1 GRD (SAR),"2 (VV, VH) multi-temporal",2 (Change),86M+,784 MB,~1800 MB,Difficult/Slow,No (OOM risk),MIT,REJECTED (RESOURCE HEAVY)
+6,STURM-Flood U-Net,STURM-WEO (Zenodo),Sentinel-1 GRD (SAR),"2 (VV, VH) 128x128",2 (Water),7.8M,45 MB,~250 MB,TF->ONNX,Yes,CC BY-SA 4.0,REJECTED (TF & CC BY-SA)
+7,Prithvi-EO 1.0 (100M) Sen1Floods11,IBM-NASA / HuggingFace,HLS Optical Only (NOT SAR),6 Optical Bands,2 (Flood),100M,440 MB,>3.5 GB,Difficult,No (Exceeds limit),Apache 2.0,ELIMINATED (OPTICAL ONLY)
+8,Prithvi-EO 2.0 (300M) Sen1Floods11,IBM-NASA / HuggingFace,HLS Optical Only (NOT SAR),6 Optical Bands,2 (Flood),300M,1.2 GB,>8.0 GB,No,No (Exceeds host),Apache 2.0,ELIMINATED (OPTICAL ONLY)

@@ -1,0 +1,289 @@
+{
+  "project": "HydroViz",
+  "task": "Pretrained Flood Segmentation Model Shortlist and Feasibility Evaluation",
+  "evaluation_date": "2026-10-09",
+  "hydroviz_spec": {
+    "task": "Semantic Segmentation",
+    "sensor": "Sentinel-1 GRD (SAR, VV+VH polarizations)",
+    "optional_fusion": "Sentinel-2 L2A (NDWI only)",
+    "resolution_m": 10.0,
+    "native_channels": 9,
+    "channel_order": [
+      "pre2_VV",
+      "pre2_VH",
+      "pre1_VV",
+      "pre1_VH",
+      "post_VV",
+      "post_VH",
+      "slope",
+      "HAND",
+      "shadow_mask"
+    ],
+    "target_classes": {
+      "0": "no_water",
+      "1": "permanent_water",
+      "2": "flood_water"
+    },
+    "inference_tile_size": [256, 256],
+    "runtime_target": "ONNX Runtime (CPU, opset 17)",
+    "container_ram_limit_gb": 2.0,
+    "host_ram_limit_gb": 8.0,
+    "training_benchmark": "Kuro Siwo (Bountos et al., NeurIPS 2024)"
+  },
+  "candidates": [
+    {
+      "rank": 1,
+      "id": "kurosiwo-snunet",
+      "name": "KuroSiwo SNUNet-CD with ECAM",
+      "organization": "Orion Lab / National Observatory of Athens",
+      "paper": "Kuro Siwo: 33 billion m^2 under the water (NeurIPS 2024)",
+      "repo_url": "https://github.com/Orion-AI-Lab/KuroSiwo",
+      "weights_url": "https://www.dropbox.com/scl/fi/3vlsveoobqe1wc71s5z2d/best_segmentation.pt?rlkey=xpy2thmozzxfzymr8b13m7n51&dl=1",
+      "checkpoint_size_mb": 138.0,
+      "estimated_param_count": "3.2M",
+      "raw_model_weights_mb": 12.8,
+      "framework": "PyTorch",
+      "sensor": "Sentinel-1 GRD (SAR)",
+      "input_polarizations": ["VV", "VH"],
+      "temporal_support": "Multi-temporal Siamese (pre-event + post-event)",
+      "classes": 2,
+      "class_semantics": "Flood / Non-Flood change detection",
+      "onnx_exportable": true,
+      "estimated_inference_ram_mb": 180,
+      "fits_2gb_limit": true,
+      "license": "MIT (code) / CC BY 4.0 (benchmark dataset)",
+      "verdict": "SELECTED_WINNER",
+      "strengths": [
+        "Trained directly on Kuro Siwo benchmark (our target training dataset specified in DECISIONS.md)",
+        "SAR-native Sentinel-1 GRD, exactly matching our ingestion pipeline",
+        "Siamese multi-temporal architecture fits pre/post event analysis",
+        "Extremely lightweight (3.2M params), runs in <200MB RAM, easily fits 2GB container",
+        "Clean PyTorch convolutions and attention, seamlessly exports to ONNX opset 17"
+      ],
+      "gaps_and_adaptation": [
+        "Pretrained head has 2 classes instead of 3 (needs new 3-class 1x1 conv output layer)",
+        "Input branches expect 2 channels each (VV, VH) instead of 9 channels (adapter stacks pre1/pre2 and routes terrain features)",
+        "Requires short fine-tuning (10-20 epochs) to adapt output head to 3 classes and terrain integration"
+      ]
+    },
+    {
+      "rank": 2,
+      "id": "smp-unet-resnet34",
+      "name": "SMP U-Net with ResNet-34 Encoder (HydroViz Planned Architecture)",
+      "organization": "segmentation_models_pytorch (qubvel)",
+      "paper": "Standard Deep Learning Segmentation Baseline",
+      "repo_url": "https://github.com/qubvel/segmentation_models.pytorch",
+      "weights_url": "ImageNet pretrained encoder weights (auto-download via torchvision/timm)",
+      "checkpoint_size_mb": 95.0,
+      "estimated_param_count": "24.4M",
+      "raw_model_weights_mb": 93.0,
+      "framework": "PyTorch (SMP)",
+      "sensor": "Configurable (arbitrary N-channel input)",
+      "input_polarizations": ["Arbitrary 9-channel stack"],
+      "temporal_support": "Native via early fusion 9-channel stacking",
+      "classes": 3,
+      "class_semantics": "0: no_water, 1: permanent_water, 2: flood_water",
+      "onnx_exportable": true,
+      "estimated_inference_ram_mb": 450,
+      "fits_2gb_limit": true,
+      "license": "MIT",
+      "verdict": "VIABLE_RUNNER_UP_AND_FALLBACK",
+      "strengths": [
+        "Exact 9-channel input and 3-class output supported out of the box with zero adapter layers",
+        "Directly documented in training/README.md and ARCHITECTURE.md as primary plan",
+        "Mature, stable PyTorch and ONNX export ecosystem",
+        "Easily fits 2GB container limit"
+      ],
+      "gaps_and_adaptation": [
+        "No SAR flood-specific pretraining (starts from ImageNet optical weights)",
+        "Requires full training from scratch on Kuro Siwo dataset rather than rapid fine-tuning",
+        "8x higher parameter count than SNUNet (24.4M vs 3.2M)"
+      ]
+    },
+    {
+      "rank": 3,
+      "id": "etci2021-unet",
+      "name": "NASA ETCI-2021 Semi-Supervised U-Net",
+      "organization": "ETCI Competition Winners (sidgan)",
+      "paper": "ETCI 2021 Competition on Flood Detection",
+      "repo_url": "https://github.com/sidgan/ETCI-2021-Competition-on-Flood-Detection",
+      "weights_url": "Available in repository release / Google Drive",
+      "checkpoint_size_mb": 85.0,
+      "estimated_param_count": "15-20M",
+      "raw_model_weights_mb": 80.0,
+      "framework": "PyTorch",
+      "sensor": "Sentinel-1 GRD (SAR)",
+      "input_polarizations": ["VV", "VH"],
+      "temporal_support": "Uni-temporal (single post-flood SAR tile)",
+      "classes": 2,
+      "class_semantics": "Binary Flood / Non-Flood",
+      "onnx_exportable": true,
+      "estimated_inference_ram_mb": 350,
+      "fits_2gb_limit": true,
+      "license": "Unspecified open source (academic competition)",
+      "verdict": "VALUABLE_ENCODER_DONOR",
+      "strengths": [
+        "SAR-native pretraining on real Sentinel-1 flood disasters",
+        "Proven performance on NASA benchmark"
+      ],
+      "gaps_and_adaptation": [
+        "Single-temporal architecture lacks pre-flood baseline integration",
+        "Binary output ignores permanent water bodies",
+        "License is not clearly specified in the repository"
+      ]
+    },
+    {
+      "rank": 4,
+      "id": "unitemporal-attentive-unet",
+      "name": "Attentive U-Net for Sentinel-1 Flood Detection",
+      "organization": "Yadav et al., Frontiers in Remote Sensing (2022)",
+      "paper": "Uni-Temporal Flood Detection Using Sentinel-1 SAR (Frontiers 2022)",
+      "repo_url": "https://github.com/RituYadav92/Uni-Temporal-Flood-Detection-Sentinel-1_Frontiers22",
+      "weights_url": "Available via author release",
+      "checkpoint_size_mb": 60.0,
+      "estimated_param_count": "12M",
+      "raw_model_weights_mb": 48.0,
+      "framework": "PyTorch",
+      "sensor": "Sentinel-1 GRD",
+      "input_polarizations": ["VV", "VH"],
+      "temporal_support": "Uni-temporal",
+      "classes": 2,
+      "class_semantics": "Water / Non-Water",
+      "onnx_exportable": true,
+      "estimated_inference_ram_mb": 300,
+      "fits_2gb_limit": true,
+      "license": "Academic research use",
+      "verdict": "SECONDARY_REFERENCE",
+      "strengths": [
+        "Attention gates improve boundary delineation for shallow floods"
+      ],
+      "gaps_and_adaptation": [
+        "Uni-temporal only, lacks multi-temporal change detection",
+        "Cannot distinguish permanent water from flood without post-processing mask"
+      ]
+    },
+    {
+      "rank": 5,
+      "id": "kurosiwo-floodvit",
+      "name": "KuroSiwo FloodViT",
+      "organization": "Orion Lab / National Observatory of Athens",
+      "paper": "Kuro Siwo: 33 billion m^2 under the water (NeurIPS 2024)",
+      "repo_url": "https://github.com/Orion-AI-Lab/KuroSiwo",
+      "weights_url": "https://www.dropbox.com/scl/fi/srw7u4cw1gtxrf4xzmsh7/floodvit.pt?rlkey=snskpq1qrdav5u2jya8k2bocg&dl=1",
+      "checkpoint_size_mb": 784.0,
+      "estimated_param_count": "86M+",
+      "raw_model_weights_mb": 340.0,
+      "framework": "PyTorch",
+      "sensor": "Sentinel-1 GRD (SAR)",
+      "input_polarizations": ["VV", "VH"],
+      "temporal_support": "Multi-temporal",
+      "classes": 2,
+      "class_semantics": "Flood / Non-Flood",
+      "onnx_exportable": false,
+      "estimated_inference_ram_mb": 1800,
+      "fits_2gb_limit": false,
+      "license": "MIT",
+      "verdict": "NOT_RECOMMENDED_EXCEEDS_RESOURCE_LIMITS",
+      "strengths": [
+        "State of the art global attention on Kuro Siwo benchmark"
+      ],
+      "gaps_and_adaptation": [
+        "Massive checkpoint (784 MB) and heavy memory footprint (~1.8GB RAM during inference)",
+        "Risk of Out-Of-Memory (OOM) inside strict 2GB Docker container",
+        "Vision Transformer ONNX export with dynamic windowing is fragile and slow on CPU"
+      ]
+    },
+    {
+      "rank": 6,
+      "id": "sturm-flood-s1",
+      "name": "STURM-Flood U-Net (Sentinel-1)",
+      "organization": "STURM-WEO",
+      "paper": "STURM-Flood: Open Source Flood Mapping",
+      "repo_url": "https://github.com/STURM-WEO/STURM-Flood",
+      "weights_url": "https://zenodo.org/records/15189664",
+      "checkpoint_size_mb": 45.0,
+      "estimated_param_count": "7.8M",
+      "raw_model_weights_mb": 31.0,
+      "framework": "TensorFlow / Keras",
+      "sensor": "Sentinel-1 GRD",
+      "input_polarizations": ["VV", "VH"],
+      "temporal_support": "Uni-temporal (128x128 tiles)",
+      "classes": 2,
+      "class_semantics": "Water / Non-Water",
+      "onnx_exportable": true,
+      "estimated_inference_ram_mb": 250,
+      "fits_2gb_limit": true,
+      "license": "CC BY-SA 4.0",
+      "verdict": "NOT_RECOMMENDED_FRAMEWORK_MISMATCH",
+      "strengths": [
+        "Well documented on Zenodo with published weights"
+      ],
+      "gaps_and_adaptation": [
+        "Built in TensorFlow/Keras while HydroViz stack is PyTorch/ONNX",
+        "Tile dimension mismatch (128x128 vs HydroViz 256x256)",
+        "CC BY-SA 4.0 share-alike license imposes viral licensing on downstream software"
+      ]
+    },
+    {
+      "rank": 7,
+      "id": "prithvi-eo-1.0-100m-sen1floods11",
+      "name": "IBM-NASA Prithvi-EO 1.0 (100M) Sen1Floods11",
+      "organization": "IBM Research & NASA IMPACT",
+      "paper": "Foundation Models for Generalist Geospatial AI (2024)",
+      "repo_url": "https://huggingface.co/ibm-nasa-geospatial/Prithvi-EO-1.0-100M-sen1floods11",
+      "weights_url": "https://huggingface.co/ibm-nasa-geospatial/Prithvi-EO-1.0-100M-sen1floods11/resolve/main/sen1floods11_Prithvi_100M.pth",
+      "checkpoint_size_mb": 440.0,
+      "estimated_param_count": "100M",
+      "raw_model_weights_mb": 420.0,
+      "framework": "PyTorch / mmsegmentation / terratorch",
+      "sensor": "HLS (Harmonized Landsat Sentinel-2) — OPTICAL ONLY",
+      "input_polarizations": ["Blue", "Green", "Red", "Narrow NIR", "SWIR1", "SWIR2"],
+      "temporal_support": "Temporal ViT sequence (optical)",
+      "classes": 2,
+      "class_semantics": "Flood / Non-Flood",
+      "onnx_exportable": false,
+      "estimated_inference_ram_mb": 3500,
+      "fits_2gb_limit": false,
+      "license": "Apache 2.0",
+      "verdict": "ELIMINATED_INCOMPATIBLE_SENSOR",
+      "strengths": [
+        "Pretrained foundation model backed by NASA and IBM"
+      ],
+      "gaps_and_adaptation": [
+        "CRITICAL SENSOR MISMATCH: Requires 6 optical bands from HLS/Sentinel-2; cannot ingest Sentinel-1 SAR",
+        "Sen1Floods11 dataset has both optical and SAR subsets, but Prithvi was trained exclusively on the optical subset",
+        "Heavy ViT foundation model requires 4GB+ RAM, completely unusable inside a 2GB container"
+      ]
+    },
+    {
+      "rank": 8,
+      "id": "prithvi-eo-2.0-300m-tl-sen1floods11",
+      "name": "IBM-NASA Prithvi-EO 2.0 (300M-TL) Sen1Floods11",
+      "organization": "IBM Research & NASA IMPACT",
+      "paper": "Prithvi-EO 2.0: Scaling Geospatial Foundation Models (2024)",
+      "repo_url": "https://huggingface.co/ibm-nasa-geospatial/Prithvi-EO-2.0-300M-TL-Sen1Floods11",
+      "weights_url": "https://huggingface.co/ibm-nasa-geospatial/Prithvi-EO-2.0-300M-TL-Sen1Floods11",
+      "checkpoint_size_mb": 1200.0,
+      "estimated_param_count": "300M",
+      "raw_model_weights_mb": 1150.0,
+      "framework": "PyTorch / TerraTorch",
+      "sensor": "HLS / Sentinel-2 Optical",
+      "input_polarizations": ["6 Optical bands"],
+      "temporal_support": "Multi-temporal optical",
+      "classes": 2,
+      "class_semantics": "Flood / Non-Flood",
+      "onnx_exportable": false,
+      "estimated_inference_ram_mb": 8000,
+      "fits_2gb_limit": false,
+      "license": "Apache 2.0",
+      "verdict": "ELIMINATED_INCOMPATIBLE_SENSOR",
+      "strengths": [
+        "State-of-the-art optical foundation model"
+      ],
+      "gaps_and_adaptation": [
+        "Optical only: fundamentally incompatible with HydroViz SAR pipeline",
+        "Exceeds even total host RAM limit (8 GB)"
+      ]
+    }
+  ]
+}
