@@ -1,6 +1,19 @@
 import httpx
-import backoff
-import rasterio
+try:
+    import backoff
+except ImportError:
+    class _MockBackoff:
+        @staticmethod
+        def on_exception(*args, **kwargs):
+            def decorator(f):
+                return f
+            return decorator
+        expo = None
+    backoff = _MockBackoff()
+try:
+    import rasterio
+except ImportError:
+    rasterio = None
 from typing import List, Dict, Any
 from .auth import auth_manager
 

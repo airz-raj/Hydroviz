@@ -80,14 +80,19 @@
 2. Python richdem/pysheds — too slow for large DEMs
 **Status:** Under review — evaluate during M6
 
-### D007 — OSM Snapshot Date: 2026-07-27
-**Date:** 2026-10-07
-**Context:** AGENT_BRIEF states the latest pre-event OSM snapshot via ohsome is 27 July 2026.
-**Decision:** Use `2026-07-27` as the default OSM snapshot date. Verify via ohsome API metadata.
-**Rationale:** This is the most recent available snapshot before the event (26 Aug 2026). Must confirm via API.
-**Alternatives considered:**
-1. Earlier date — less complete data, no advantage
-**Status:** Accepted — verify API metadata during M1
+### D008 — Number Guard: Devanagari Unicode Normalization
+**Date:** 2026-10-09
+**Context:** Nepali situation reports render numbers using Devanagari script (०-९). LLM summaries or external translations can introduce hallucinations.
+**Decision:** Standardized number guard with full bidirectional Devanagari digit mapping (०-९ ↔ 0-9) and comma-stripping to extract and validate all numbers against `facts.json`.
+**Rationale:** Prevents hallucinated figures in both English and Nepali situation reports while preserving natural script rendering for local humanitarian personnel.
+**Status:** Accepted
+
+### D009 — Dual Mapping for Facts Schema & Template Compatibility
+**Date:** 2026-10-09
+**Context:** Situation report HTML templates expect flat metrics (`facts.exposure.buildings_exposed_high`), while JSON schema enforces structured nested contracts (`facts.exposure.buildings.exposed_high`).
+**Decision:** Implemented recursive flattening in the report generator and populated dual representations in `worker.py` and `gateway/main.py`.
+**Rationale:** Preserves 100% strict JSON schema validation while allowing robust Jinja/string replacement without breaking existing templates or API consumers.
+**Status:** Accepted
 
 ---
 

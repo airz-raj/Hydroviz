@@ -16,6 +16,8 @@ target/
 # Data & models
 /data/
 *.onnx
+*.onnx.data
+*.pt
 
 # macOS
 .DS_Store

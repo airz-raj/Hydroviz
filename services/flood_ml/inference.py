@@ -5,7 +5,22 @@ import onnxruntime as ort
 
 class FloodInferenceONNX:
     def __init__(self, model_path: str = None):
-        self.model_path = model_path or os.getenv("MODEL_PATH", "/data/models/flood_seg_v1_int8.onnx")
+        if model_path:
+            self.model_path = model_path
+        else:
+            default_docker_path = os.getenv("MODEL_PATH", "/data/models/flood_seg_v1_int8.onnx")
+            if os.path.exists(default_docker_path):
+                self.model_path = default_docker_path
+            else:
+                # Host/local dev fallback
+                host_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "flood_seg_v1_int8.onnx"))
+                if os.path.exists(host_path):
+                    self.model_path = host_path
+                elif os.path.exists("flood_seg_v1_int8.onnx"):
+                    self.model_path = os.path.abspath("flood_seg_v1_int8.onnx")
+                else:
+                    self.model_path = default_docker_path
+
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(f"Model not found at {self.model_path}. Did you run download_weights.py and quantize.py on the host?")
             
@@ -25,13 +40,6 @@ class FloodInferenceONNX:
         Uses Gaussian weighting to blend overlapping predictions.
         """
         c, h, w = tile_data.shape
-        out_probs = np.zeros((3, h, w), dtype=np.float32)
-        weight_sum = np.zeros((1, h, w), dtype=np.float32)
-        
-        # Create 2D gaussian window
-        y, x = np.ogrid[-window_size//2 : window_size//2, -window_size//2 : window_size//2]
-        sigma = window_size / 4.0
-        gaussian_weight = np.exp(-(x*x + y*y) / (2.*sigma*sigma))
         
         # Pad tile_data if smaller than window_size
         pad_h = max(0, window_size - h)
@@ -41,22 +49,41 @@ class FloodInferenceONNX:
             
         new_h, new_w = tile_data.shape[1], tile_data.shape[2]
         
-        for i in range(0, new_h - window_size + 1, step):
-            for j in range(0, new_w - window_size + 1, step):
+        # Ensure out_probs matches padded dimensions (new_h, new_w) during inference
+        out_probs = np.zeros((3, new_h, new_w), dtype=np.float32)
+        weight_sum = np.zeros((1, new_h, new_w), dtype=np.float32)
+        
+        # Create 2D gaussian window
+        y, x = np.ogrid[-window_size//2 : window_size//2, -window_size//2 : window_size//2]
+        sigma = window_size / 4.0
+        gaussian_weight = np.exp(-(x*x + y*y) / (2.*sigma*sigma))
+        
+        # Generate row and col offsets ensuring complete coverage
+        row_steps = list(range(0, new_h - window_size + 1, step))
+        if row_steps[-1] < new_h - window_size:
+            row_steps.append(new_h - window_size)
+            
+        col_steps = list(range(0, new_w - window_size + 1, step))
+        if col_steps[-1] < new_w - window_size:
+            col_steps.append(new_w - window_size)
+        
+        for i in row_steps:
+            for j in col_steps:
                 patch = tile_data[:, i:i+window_size, j:j+window_size]
                 patch = np.expand_dims(patch, axis=0).astype(np.float32)
                 
                 logits = self.session.run([self.output_name], {self.input_name: patch})[0][0]
                 
-                # Convert logits to probabilities
-                probs = np.exp(logits) / np.sum(np.exp(logits), axis=0)
+                # Convert logits to probabilities via softmax
+                exp_logits = np.exp(logits - np.max(logits, axis=0, keepdims=True))
+                probs = exp_logits / np.sum(exp_logits, axis=0, keepdims=True)
                 
                 out_probs[:, i:i+window_size, j:j+window_size] += probs * gaussian_weight
                 weight_sum[:, i:i+window_size, j:j+window_size] += gaussian_weight
                 
         # Normalize
         out_probs /= np.clip(weight_sum, 1e-8, None)
-        # Crop back to original size if padded
+        # Crop back to original unpadded size
         out_probs = out_probs[:, :h, :w]
         
         return np.argmax(out_probs, axis=0)
@@ -66,11 +93,9 @@ class FloodInferenceONNX:
         Processes a large scene chunk by chunk to avoid exceeding the 2GB memory limit.
         `datasets` is a dict of rasterio DatasetReaders:
         {'pre_vv': src, 'pre_vh': src, 'post_vv': src, 'post_vh': src, 'slope': src, 'hand': src, 'shadow': src}
-        (Assuming pre1 and pre2 are already averaged into 'pre_vv'/'pre_vh' by preprocessing)
         """
         from rasterio.windows import Window
         
-        # We assume all datasets have identical dimensions (co-registered)
         width = datasets['post_vv'].width
         height = datasets['post_vv'].height
         
@@ -82,9 +107,6 @@ class FloodInferenceONNX:
                                 min(chunk_size, width - col_offset), 
                                 min(chunk_size, height - row_offset))
                 
-                # Stack 9 channels for the ONNX model (matching training features)
-                # 0: pre2_VV, 1: pre2_VH, 2: pre1_VV, 3: pre1_VH, 4: post_VV, 5: post_VH, 6: slope, 7: HAND, 8: shadow
-                # We duplicate 'pre' into pre1/pre2 slots if we only have one pre composite
                 pre_vv = datasets['pre_vv'].read(1, window=window)
                 pre_vh = datasets['pre_vh'].read(1, window=window)
                 post_vv = datasets['post_vv'].read(1, window=window)
@@ -103,7 +125,6 @@ class FloodInferenceONNX:
                 
                 final_mask[row_offset:row_offset+window.height, col_offset:col_offset+window.width] = chunk_mask[:window.height, :window.width]
                 
-                # Crucial for 8GB RAM host / 2GB Container Limit: Garbage Collect
                 del chunk_data
                 del chunk_mask
                 gc.collect()

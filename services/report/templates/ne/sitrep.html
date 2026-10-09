@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ne">
+<head>
+    <meta charset="UTF-8">
+    <title>हाइड्रोभिज बाढी स्थिति प्रतिवेदन</title>
+    <style>
+        body { font-family: 'Noto Sans Devanagari', Arial, sans-serif; line-height: 1.6; }
+        .header { background-color: #f8f9fa; padding: 20px; text-align: center; border-bottom: 2px solid #007bff; }
+        .metrics { display: flex; justify-content: space-around; padding: 20px 0; }
+        .metric-box { border: 1px solid #ccc; padding: 15px; text-align: center; border-radius: 6px; min-width: 160px; }
+        .footer { margin-top: 30px; font-size: 0.85em; color: #666; text-align: center; border-top: 1px solid #eee; padding-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>बाढी तथा पहिरो विपद् स्थिति प्रतिवेदन</h1>
+        <p>घटना मिति: {{ event_date }} (कार्य आईडी: {{ job_id }})</p>
+    </div>
+    
+    <div class="metrics">
+        <div class="metric-box">
+            <h3>जलमग्न क्षेत्र</h3>
+            <p><strong>{{ facts.flood.flooded_area_km2 }}</strong> वर्ग कि.मि.</p>
+        </div>
+        <div class="metric-box">
+            <h3>जोखिममा परेका घरहरू</h3>
+            <p><strong>{{ facts.exposure.buildings_exposed_high }}</strong> संरचना</p>
+        </div>
+        <div class="metric-box">
+            <h3>अलपत्र बस्तीहरू</h3>
+            <p><strong>{{ facts.cutoff.isolated_settlements }}</strong> स्थान</p>
+        </div>
+    </div>
+    
+    <h3>पूर्वाधार क्षति विवरण</h3>
+    <p>जलमग्न/अवरुद्ध सडक खण्ड: <strong>{{ facts.exposure.roads_exposed_length_m }}</strong> मिटर</p>
+    <p>सम्भावित क्षतिग्रस्त पुलहरू: <strong>{{ facts.exposure.bridges_likely_damaged }}</strong></p>
+    
+    <div class="footer">
+        <p>उत्पादन: हाइड्रोभिज हिमालयन विपद् सूचना प्रणाली • युरोपेली अन्तरिक्ष संस्था Sentinel-1 SAR डाटा • शैक्षिक तथा प्रयोगात्मक प्रयोजन मात्र।</p>
+    </div>
+</body>
+</html>

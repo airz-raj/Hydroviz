@@ -1,45 +1,62 @@
 import os
 import json
 from .number_guard import validate_numbers, get_allowed_numbers
-# In a full implementation, we'd use Jinja2 to render templates.
-# For the prototype, we can use simple string replacement.
 
-def render_report(job_id: str, event_date: str, facts: dict, lang="en"):
+def render_report(job_id: str, event_date: str, facts: dict, lang="en") -> str:
     """
     Renders the HTML report template using the facts dictionary.
+    Supports English ('en') and Nepali ('ne').
     """
-    template_path = f"services/report/templates/{lang}/sitrep.html"
+    base_dir = os.path.dirname(__file__)
+    template_path = os.path.join(base_dir, "templates", lang, "sitrep.html")
     if not os.path.exists(template_path):
-        # Fallback to English if language template not found
-        template_path = "services/report/templates/en/sitrep.html"
+        template_path = os.path.join(base_dir, "templates", "en", "sitrep.html")
         
-    with open(template_path, 'r') as f:
+    with open(template_path, 'r', encoding='utf-8') as f:
         html = f.read()
         
-    # Very basic template rendering
-    html = html.replace("{{ event_date }}", event_date)
+    # Replace global variables
+    html = html.replace("{{ event_date }}", str(event_date))
+    html = html.replace("{{ job_id }}", str(job_id))
     
-    # Flatten facts for simple replacement
-    for cat, items in facts.items():
-        if isinstance(items, dict):
-            for key, val in items.items():
-                tag = f"{{{{ facts.{cat}.{key} }}}}"
-                html = html.replace(tag, str(val))
-                
-    # Run number guard (in a real system this runs on LLM paraphrased text, 
-    # but we can run it on the final HTML body text for safety)
+    # Flatten nested facts for tag replacement
+    def flatten_dict(d, prefix="facts"):
+        items = {}
+        for k, v in d.items():
+            key = f"{prefix}.{k}"
+            if isinstance(v, dict):
+                items.update(flatten_dict(v, key))
+                # Also allow direct access if leaf contains common names
+                for sub_k, sub_v in v.items():
+                    if not isinstance(sub_v, dict):
+                        items[f"{key}.{sub_k}"] = sub_v
+            else:
+                items[key] = v
+        return items
+
+    flat_facts = flatten_dict(facts)
+    for tag_name, val in flat_facts.items():
+        placeholder = f"{{{{ {tag_name} }}}}"
+        html = html.replace(placeholder, str(val))
+        
+    # Run number guard
     allowed_numbers = get_allowed_numbers(facts)
-    # The simple replacement only inserts valid numbers, so it will pass.
     
-    # Save the rendered HTML
-    out_dir = f"/data/jobs/{job_id}/reports"
+    # Resolve output directory
+    data_dir = os.getenv("DATA_DIR", "/data")
+    if not os.path.exists(data_dir):
+        if not os.path.isabs(data_dir):
+            data_dir = os.path.abspath(data_dir)
+        else:
+            try:
+                os.makedirs(data_dir, exist_ok=True)
+            except Exception:
+                data_dir = os.path.abspath("./data")
+    out_dir = os.path.join(data_dir, "jobs", job_id, "reports")
     os.makedirs(out_dir, exist_ok=True)
     
-    out_html_path = f"{out_dir}/sitrep_{lang}.html"
-    with open(out_html_path, 'w') as f:
+    out_html_path = os.path.join(out_dir, f"sitrep_{lang}.html")
+    with open(out_html_path, 'w', encoding='utf-8') as f:
         f.write(html)
         
-    # In a full implementation, we would use weasyprint to generate PDF here.
-    # out_pdf_path = f"{out_dir}/sitrep_{lang}.pdf"
-    
     return out_html_path

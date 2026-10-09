@@ -1,0 +1,76 @@
+{
+  "nodes": [
+    "town_center",
+    "hospital_east",
+    "junction_1",
+    "village_melamchi",
+    "village_talamarang",
+    "village_isolated_island",
+    "island_ridge"
+  ],
+  "targets": [
+    "town_center",
+    "hospital_east"
+  ],
+  "settlements": [
+    {
+      "osm_id": 1001,
+      "name": "Village Melamchi",
+      "node_id": "village_melamchi"
+    },
+    {
+      "osm_id": 1002,
+      "name": "Village Talamarang",
+      "node_id": "village_talamarang"
+    },
+    {
+      "osm_id": 1003,
+      "name": "Village Isolated Island",
+      "node_id": "village_isolated_island"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_primary_access",
+      "u": "town_center",
+      "v": "village_melamchi",
+      "weight": 1000.0,
+      "highway": "primary"
+    },
+    {
+      "id": "edge_detour_highland",
+      "u": "town_center",
+      "v": "junction_1",
+      "weight": 3000.0,
+      "highway": "secondary"
+    },
+    {
+      "id": "edge_detour_link",
+      "u": "junction_1",
+      "v": "village_melamchi",
+      "weight": 500.0,
+      "highway": "tertiary"
+    },
+    {
+      "id": "edge_valley_corridor",
+      "u": "village_melamchi",
+      "v": "village_talamarang",
+      "weight": 1200.0,
+      "highway": "secondary"
+    },
+    {
+      "id": "edge_hospital_conn",
+      "u": "hospital_east",
+      "v": "town_center",
+      "weight": 800.0,
+      "highway": "primary"
+    },
+    {
+      "id": "edge_island_internal",
+      "u": "village_isolated_island",
+      "v": "island_ridge",
+      "weight": 400.0,
+      "highway": "track"
+    }
+  ]
+}

@@ -10,6 +10,11 @@ pub mod cutoff;
 pub mod flowpath;
 pub mod dem;
 
+#[pyfunction]
+pub fn health_check() -> PyResult<String> {
+    Ok("ok".to_string())
+}
+
 #[pymodule]
 fn geo_core(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<types::Building>()?;
@@ -18,6 +23,7 @@ fn geo_core(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<types::Settlement>()?;
     m.add_class::<types::ExposureResult>()?;
     
+    m.add_function(wrap_pyfunction!(health_check, m)?)?;
     m.add_function(wrap_pyfunction!(run_exposure_analysis, m)?)?;
     m.add_function(wrap_pyfunction!(run_cutoff_analysis, m)?)?;
     m.add_function(wrap_pyfunction!(run_flow_path_tracing, m)?)?;

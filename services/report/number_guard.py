@@ -1,46 +1,70 @@
 import re
+from typing import List, Tuple, Optional, Any
 
-def extract_numbers(text):
-    """Extracts all standalone numerals (including decimals) from a text string."""
-    # Find numbers like 10, 3.14, .5
-    return re.findall(r'\b\d+(?:\.\d+)?\b', text)
+DEVANAGARI_DIGITS = {
+    '०': '0',
+    '१': '1',
+    '२': '2',
+    '३': '3',
+    '४': '4',
+    '५': '5',
+    '६': '6',
+    '७': '7',
+    '८': '8',
+    '९': '9'
+}
 
-def validate_numbers(text, allowed_numbers):
+def normalise_devanagari_digits(text: str) -> str:
+    """Replaces all Devanagari digits (०-९) with ASCII Arabic digits (0-9)."""
+    return "".join(DEVANAGARI_DIGITS.get(ch, ch) for ch in text)
+
+def extract_numbers(text: str) -> List[str]:
     """
-    Checks if every number in 'text' exists in 'allowed_numbers'.
+    Extracts all standalone numerals (including decimals) from text.
+    Handles Devanagari digits and comma-separated numbers (e.g. 1,000).
+    """
+    normalized = normalise_devanagari_digits(text)
+    # Remove commas between digits to handle formatting like 1,500
+    cleaned = re.sub(r'(?<=\d),(?=\d)', '', normalized)
+    return re.findall(r'\b\d+(?:\.\d+)?\b', cleaned)
+
+def validate_numbers(text: str, allowed_numbers: List[Any], tolerance: float = 1e-4) -> Tuple[bool, Optional[str]]:
+    """
+    Checks if every number present in 'text' exists in 'allowed_numbers'.
     Returns (is_valid, offending_number).
     """
     extracted = extract_numbers(text)
-    # Convert all to float for safe comparison
-    allowed_floats = [float(n) for n in allowed_numbers]
-    
+    allowed_floats = []
+    for n in allowed_numbers:
+        try:
+            allowed_floats.append(float(n))
+        except (ValueError, TypeError):
+            pass
+            
     for num_str in extracted:
         try:
             val = float(num_str)
-            # If the number is not in the allowed facts (allow small floating point tolerance)
-            if not any(abs(val - allowed) < 1e-5 for allowed in allowed_floats):
+            # Check if val matches any allowed number within tolerance
+            if not any(abs(val - allowed) < tolerance for allowed in allowed_floats):
                 return False, num_str
         except ValueError:
             pass
             
     return True, None
 
-def get_allowed_numbers(facts_dict):
-    """Extracts all numerical values from the nested facts dictionary."""
+def get_allowed_numbers(facts_dict: dict) -> List[float]:
+    """Extracts all numerical values from any arbitrarily nested facts structure."""
     allowed = []
     
-    def extract_from_dict(d):
-        for k, v in d.items():
-            if isinstance(v, (int, float)):
-                allowed.append(v)
-            elif isinstance(v, dict):
-                extract_from_dict(v)
-            elif isinstance(v, list):
-                for item in v:
-                    if isinstance(item, (int, float)):
-                        allowed.append(item)
-                    elif isinstance(item, dict):
-                        extract_from_dict(item)
-                        
-    extract_from_dict(facts_dict)
+    def extract_recursive(val):
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            allowed.append(float(val))
+        elif isinstance(val, dict):
+            for v in val.values():
+                extract_recursive(v)
+        elif isinstance(val, (list, tuple, set)):
+            for item in val:
+                extract_recursive(item)
+                
+    extract_recursive(facts_dict)
     return allowed

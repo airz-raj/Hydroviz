@@ -84,6 +84,7 @@ services:
       - ./services/flood_ml:/app
       - ./services/shared:/shared
       - data-volume:/data
+      - ./flood_seg_v1_int8.onnx:/data/models/flood_seg_v1_int8.onnx:ro
     env_file: .env
     depends_on:
       redis:
