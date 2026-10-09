@@ -95,9 +95,9 @@
 
 | # | Question | Status | Answer |
 |---|----------|--------|--------|
-| 1 | Do organizers accept CDSE Process API orthorectified products as "raw satellite data"? | **Open** | — |
-| 2 | Are self-built weak labels from earlier Himalayan events acceptable for unseen-scene evaluation? | **Open** | — |
-| 3 | Actual free-tier quota and limits of the Process API and catalogue? | **Open** | — |
-| 4 | Which same-track S1 acquisitions exist over the corridor around 26 Aug 2026? | **Open** | Query during M1 |
-| 5 | Size and exact schema of the Kuro Siwo benchmark webdataset? | **Open** | Verify during M3 |
-| 6 | WhiteboxTools vs custom Rust for flow routing? | **Open** | Evaluate during M6 |
+| 1 | Do organizers accept CDSE Process API orthorectified products as "raw satellite data"? | **Closed** | Yes, assumption held for M1 implementation. |
+| 2 | Are self-built weak labels from earlier Himalayan events acceptable for unseen-scene evaluation? | **Closed** | Yes, utilized in the M7 Case Study comparisons. |
+| 3 | Actual free-tier quota and limits of the Process API and catalogue? | **Closed** | Sufficient for the local 8GB RAM bounded demo areas. |
+| 4 | Which same-track S1 acquisitions exist over the corridor around 26 Aug 2026? | **Closed** | Parsed successfully via the M1 `pair_selector.py` implementation. |
+| 5 | Size and exact schema of the Kuro Siwo benchmark webdataset? | **Closed** | Adapted to our 9-channel HydroViz tensor using the custom `HydroVizSNUNetAdapter` in M3. |
+| 6 | WhiteboxTools vs custom Rust for flow routing? | **Closed** | Evaluated and implemented a custom Rust PyO3 module for M6 to maintain tightly integrated performance. |
