@@ -38,6 +38,7 @@ services:
     volumes:
       - ./services/gateway:/app
       - ./services/shared:/shared
+      - ./dashboard:/dashboard
       - data-volume:/data
     env_file: .env
     depends_on:
