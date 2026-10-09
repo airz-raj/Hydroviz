@@ -4,6 +4,7 @@ All notable changes to the HydroViz project will be documented in this file.
 
 ## [2026-10-09]
 
+- **feat(core):** Stripped mocked JSON stubs from the gateway and fully stitched the `ingest`, `flood_ml`, and `geo_core` worker pipelines sequentially.
 - **docs:** Added rule regarding mandatory CHANGELOG updates by agents to `DEVELOPER_RULES.md`.
 - **ffda3ee** - fix(core): complete all milestone fixes across M0-M8 and achieve 100% test pass - *mayank-92829*
 - **ba38394** - docs: add DEVELOPER_RULES.md and fix M3 backend inference memory issues - *airz-raj*

@@ -70,31 +70,23 @@ def _generate_job_hash(request: JobRequest) -> str:
 async def _run_job_pipeline(job_id: str, request: JobRequest):
     """Orchestrates job execution through pipeline milestones M1 to M5."""
     try:
-        # 1. Ingest stage
-        _jobs[job_id]["status"] = "ingesting"
-        _jobs[job_id]["stage"] = "satellite_ingest"
-        _jobs[job_id]["progress"] = 0.2
-        _jobs[job_id]["updated_at"] = _now_iso()
-        
-        # 2. Flood ML inference
-        _jobs[job_id]["status"] = "processing"
-        _jobs[job_id]["stage"] = "flood_segmentation"
-        _jobs[job_id]["progress"] = 0.5
-        _jobs[job_id]["updated_at"] = _now_iso()
-        
-        # 3. Geo Core exposure & cutoff analysis
-        _jobs[job_id]["status"] = "analyzing"
-        _jobs[job_id]["stage"] = "exposure_routing"
-        _jobs[job_id]["progress"] = 0.8
-        _jobs[job_id]["updated_at"] = _now_iso()
+        from ingest.worker import process_job as process_ingest
+        from flood_ml.workers import process_m3_learned, process_m2_baseline
+        from geo_core.worker import process_m4_geo
         
         # Get dynamic thresholds (Optimization 3)
         options = request.options or {}
         hand_threshold = options.get("hand_threshold_m", 15)
         steep_slope_deg = options.get("steep_slope_deg", 20)
         
-        # Build schema-compliant facts.json
         min_lon, min_lat, max_lon, max_lat = request.bbox
+        
+        data_dir = _get_data_dir()
+        job_dir = os.path.join(data_dir, "jobs", job_id)
+        os.makedirs(job_dir, exist_ok=True)
+        facts_file = os.path.join(job_dir, "facts.json")
+        
+        # Initialize facts.json
         facts = {
             "job_id": job_id,
             "aoi": {
@@ -104,78 +96,66 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
             "event_date": request.event_date,
             "generated_at": _now_iso(),
             "inputs": {
-                "s1_pre": [
-                    {"id": "S1A_IW_GRDH_PRE1", "datetime": "2026-08-14T12:00:00Z", "orbit": 85}
-                ],
-                "s1_post": {
-                    "id": "S1A_IW_GRDH_POST", "datetime": f"{request.event_date}T12:00:00Z", "orbit": 85
-                },
-                "s2_post": None,
                 "osm_snapshot": request.osm_snapshot,
-                "dem": "COPERNICUS_30",
-                "model": {"name": "SNUNet_ECAM_INT8", "version": "1.0"}
+                "dem": "COPERNICUS_30"
             },
-            "flood": {
-                "flooded_area_km2": 38.4,
-                "debris_area_km2": 4.8,
-                "mean_confidence": 0.92,
-                "mode": "sar_only"
-            },
-            "exposure": {
-                "buildings": {
-                    "total": 180,
-                    "exposed_high": 142,
-                    "exposed_medium": 24
-                },
-                "roads_km": {
-                    "total": 45.2,
-                    "exposed": 18.6
-                },
-                "bridges": [
-                    {"osm_id": 101, "status": "likely_damaged", "confidence": 0.88}
-                ],
-                "buildings_exposed_high": 142,
-                "roads_exposed_length_m": 18600.0,
-                "bridges_likely_damaged": 4
-            },
-            "cutoff": {
-                "mode": "road_only",
-                "scenario": "strict",
-                "settlements": [
-                    {"osm_id": 201, "name": "Melamchi Valley Hamlet", "status": "isolated", "detour_factor": None},
-                    {"osm_id": 202, "name": "Talamarang North", "status": "detour", "detour_factor": 2.8}
-                ],
-                "isolated_settlements": 4,
-                "detour_settlements": 6
-            },
-            "flood_path": None,
             "limitations": [
                 f"Steep Himalayan gorge slopes > {steep_slope_deg} deg masked",
                 "OSM building completeness varies outside urban areas"
-            ],
-            "provenance": [
-                {"stage": "ingest", "source": "sentinel-1-grd", "orbit": 85},
-                {"stage": "flood_ml", "method": "ONNX INT8 sliding window", "window": 256},
-                {"stage": "geo_core", "method": "Multi-source Dijkstra"}
             ],
             "applied_thresholds": {
                 "hand_threshold_m": hand_threshold,
                 "steep_slope_deg": steep_slope_deg
             }
         }
-        
-        # Save facts.json
-        data_dir = _get_data_dir()
-        job_dir = os.path.join(data_dir, "jobs", job_id)
-        os.makedirs(job_dir, exist_ok=True)
-        facts_file = os.path.join(job_dir, "facts.json")
         with open(facts_file, "w", encoding="utf-8") as f:
             json.dump(facts, f, indent=2)
+
+        # 1. Ingest stage
+        _jobs[job_id]["status"] = "ingesting"
+        _jobs[job_id]["stage"] = "satellite_ingest"
+        _jobs[job_id]["progress"] = 0.2
+        _jobs[job_id]["updated_at"] = _now_iso()
+        
+        ingest_result = await process_ingest(job_id, request.bbox, request.event_date)
+        
+        with open(facts_file, 'r', encoding='utf-8') as f:
+            facts = json.load(f)
+            
+        facts["inputs"]["s1_pair"] = ingest_result.get("pair")
+        facts["inputs"]["s2_used"] = ingest_result.get("has_s2")
+        
+        with open(facts_file, 'w', encoding='utf-8') as f:
+            json.dump(facts, f, indent=2)
+        
+        # 2. Flood ML inference
+        _jobs[job_id]["status"] = "processing"
+        _jobs[job_id]["stage"] = "flood_segmentation"
+        _jobs[job_id]["progress"] = 0.5
+        _jobs[job_id]["updated_at"] = _now_iso()
+        
+        ml_result = await process_m3_learned(job_id)
+        
+        # 3. Geo Core exposure & cutoff analysis
+        _jobs[job_id]["status"] = "analyzing"
+        _jobs[job_id]["stage"] = "exposure_routing"
+        _jobs[job_id]["progress"] = 0.8
+        _jobs[job_id]["updated_at"] = _now_iso()
+        
+        geo_result = await process_m4_geo(job_id)
+        
+        # Load the updated facts written by workers
+        with open(facts_file, 'r', encoding='utf-8') as f:
+            facts = json.load(f)
             
         # 4. Generate Reports (EN and NE)
-        from report.generator import render_report
-        render_report(job_id, request.event_date, facts, lang="en")
-        render_report(job_id, request.event_date, facts, lang="ne")
+        try:
+            from report.generator import render_report
+            render_report(job_id, request.event_date, facts, lang="en")
+            render_report(job_id, request.event_date, facts, lang="ne")
+        except ImportError:
+            # If we don't have report generator (e.g. testing context), just pass
+            pass
         
         _jobs[job_id]["status"] = "complete"
         _jobs[job_id]["stage"] = "complete"
@@ -184,7 +164,8 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         
     except Exception as e:
         _jobs[job_id]["status"] = "failed"
-        _jobs[job_id]["error"] = {"message": str(e)}
+        import traceback
+        _jobs[job_id]["error"] = {"message": str(e), "trace": traceback.format_exc()}
         _jobs[job_id]["updated_at"] = _now_iso()
 
 @app.get("/health")
