@@ -4,10 +4,10 @@ import numpy as np
 import onnxruntime as ort
 
 class FloodInferenceONNX:
-    def __init__(self, model_path: str = "models/flood_seg_v1_int8.onnx"):
-        self.model_path = model_path
+    def __init__(self, model_path: str = None):
+        self.model_path = model_path or os.getenv("MODEL_PATH", "/data/models/flood_seg_v1_int8.onnx")
         if not os.path.exists(self.model_path):
-            raise FileNotFoundError(f"Model not found at {model_path}. Did you run download_weights.py and quantize.py?")
+            raise FileNotFoundError(f"Model not found at {self.model_path}. Did you run download_weights.py and quantize.py on the host?")
             
         # Optimization for ONNX runtime
         sess_options = ort.SessionOptions()
@@ -61,14 +61,18 @@ class FloodInferenceONNX:
         
         return np.argmax(out_probs, axis=0)
         
-    def process_large_scene(self, dataset_9ch, chunk_size=512):
+    def process_large_scene(self, datasets: dict, chunk_size=512):
         """
         Processes a large scene chunk by chunk to avoid exceeding the 2GB memory limit.
-        dataset_9ch is expected to be a rasterio DatasetReader.
+        `datasets` is a dict of rasterio DatasetReaders:
+        {'pre_vv': src, 'pre_vh': src, 'post_vv': src, 'post_vh': src, 'slope': src, 'hand': src, 'shadow': src}
+        (Assuming pre1 and pre2 are already averaged into 'pre_vv'/'pre_vh' by preprocessing)
         """
         from rasterio.windows import Window
-        width = dataset_9ch.width
-        height = dataset_9ch.height
+        
+        # We assume all datasets have identical dimensions (co-registered)
+        width = datasets['post_vv'].width
+        height = datasets['post_vv'].height
         
         final_mask = np.zeros((height, width), dtype=np.uint8)
         
@@ -78,7 +82,22 @@ class FloodInferenceONNX:
                                 min(chunk_size, width - col_offset), 
                                 min(chunk_size, height - row_offset))
                 
-                chunk_data = dataset_9ch.read(window=window)
+                # Stack 9 channels for the ONNX model (matching training features)
+                # 0: pre2_VV, 1: pre2_VH, 2: pre1_VV, 3: pre1_VH, 4: post_VV, 5: post_VH, 6: slope, 7: HAND, 8: shadow
+                # We duplicate 'pre' into pre1/pre2 slots if we only have one pre composite
+                pre_vv = datasets['pre_vv'].read(1, window=window)
+                pre_vh = datasets['pre_vh'].read(1, window=window)
+                post_vv = datasets['post_vv'].read(1, window=window)
+                post_vh = datasets['post_vh'].read(1, window=window)
+                slope = datasets['slope'].read(1, window=window)
+                hand = datasets['hand'].read(1, window=window)
+                shadow = datasets['shadow'].read(1, window=window)
+                
+                chunk_data = np.stack([
+                    pre_vv, pre_vh, pre_vv, pre_vh, 
+                    post_vv, post_vh, 
+                    slope, hand, shadow
+                ], axis=0)
                 
                 chunk_mask = self._sliding_window_inference(chunk_data)
                 

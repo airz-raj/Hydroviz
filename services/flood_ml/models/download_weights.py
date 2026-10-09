@@ -1,3 +1,18 @@
+"""
+IMPORTANT:
+Run this script locally on your HOST machine before running `docker compose up`.
+Do NOT run this script inside the `flood_ml` Docker container.
+
+Why?
+To meet the 8GB RAM local testing constraint, we explicitly DO NOT install 
+PyTorch in the `flood_ml` container. PyTorch has a massive memory footprint.
+This script downloads the .pt weights, converts them to ONNX, and (optionally)
+quantizes them. The lightweight ONNX runtime is what the container will use.
+
+Make sure you have `torch` and `onnx` installed locally:
+pip install torch onnx onnxruntime
+"""
+
 import os
 import urllib.request
 import sys
