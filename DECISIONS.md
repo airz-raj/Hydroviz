@@ -24,10 +24,10 @@
 ## Decisions
 
 ### D001 — AI Component: Flood Segmentation Model
-**Date:** 2026-10-07
+**Date:** 2026-10-08
 **Context:** Track B offers two AI component choices: flood segmentation model OR situation-report copilot. Must choose one.
-**Decision:** Flood segmentation model (train on Kuro Siwo, evaluate on Himalayan scenes).
-**Rationale:** Aligns with AGENT_BRIEF which pre-selected this option. Higher scoring weight (25%) for a well-evaluated model. The report copilot is partially covered by the template + number guard approach anyway.
+**Decision:** Flood segmentation model (Pre-trained ONNX procurement, evaluated on Himalayan scenes).
+**Rationale:** Aligns with AGENT_BRIEF. To meet the 8GB RAM local testing constraint, we pivot from training from scratch to downloading a pre-trained model (e.g. Prithvi-EO) and running it via ONNXRuntime with INT8 quantization.
 **Alternatives considered:**
 1. Situation-report copilot — still partially implemented via template + optional LLM paraphrase, but not the primary AI component.
 **Status:** Accepted
@@ -60,15 +60,15 @@
 1. Local SNAP processing — fallback if API quota insufficient
 **Status:** Accepted — must verify quota early (M1)
 
-### D005 — Training Dataset: Kuro Siwo Benchmark Subset
-**Date:** 2026-10-07
-**Context:** Full Kuro Siwo is ~1.33 TB. Need to verify the benchmark webdataset release size.
-**Decision:** Use the benchmark webdataset release (smaller). Verify size before downloading.
-**Rationale:** Full dataset impractical for hackathon timeline. Benchmark release should have curated train/val/test splits.
+### D005 — Training Dataset: Pre-trained Weights (No Local Training)
+**Date:** 2026-10-08
+**Context:** Training a UNet from scratch on a massive dataset inside a Docker container will OOM on an 8GB machine.
+**Decision:** Do not train a model from scratch. Download open-source pre-trained weights (Sen1Floods11 or Kuro Siwo) and convert to ONNX.
+**Rationale:** Fits within 8GB RAM constraint. ONNX Runtime handles inference efficiently. Memory chunking and aggressive GC will be used.
 **Alternatives considered:**
-1. Full dataset — too large, too slow to download
-2. Sen1Floods11 only — smaller but less relevant, optional supplement
-**Status:** Accepted — verify size during M3
+1. Training locally on full dataset — OOM crash guaranteed on 8GB RAM.
+2. Cloud training — outside the scope of local hackathon testing.
+**Status:** Accepted
 
 ### D006 — Flow Routing: Evaluate WhiteboxTools First
 **Date:** 2026-10-07

@@ -14,7 +14,7 @@ Given an **area (bbox)** and a **flood date**, HydroViz uses free satellite data
 2. **What was damaged?** — Buildings, roads and bridges from OpenStreetMap overlaid on the hazard map
 3. **Who is cut off?** — Road network analysis showing which settlements lost access to towns and hospitals
 
-Plus: AI flood segmentation model trained on Kuro Siwo, flood path tracing from elevation data, and case-study comparison with Copernicus EMS.
+Plus: AI flood segmentation model using lightweight pre-trained ONNX weights (optimized for 8GB RAM), flood path tracing from elevation data, and case-study comparison with Copernicus EMS.
 
 ---
 
@@ -82,9 +82,9 @@ hydroviz/
 │   ├── geo_core/                       ← Rust: exposure, cut-off, flood path
 │   └── report/                         ← Sitrep templates (EN/NE), number guard, PDF
 │
-├── training/                           ← Model training, evaluation, ONNX export
-│   ├── datasets/                       ← Kuro Siwo + Sen1Floods11 loaders
-│   ├── configs/                        ← Training hyperparameters
+├── training/                           ← Model evaluation, ONNX export, and quantization
+│   ├── datasets/                       ← Kuro Siwo + Sen1Floods11 loaders (for evaluation)
+│   ├── configs/                        ← Inference hyperparameters
 │   └── model_card.md                   ← Data, metrics, failure modes
 │
 ├── dashboard/                          ← MapLibre GL JS frontend
@@ -131,8 +131,8 @@ hydroviz/
 | [Sentinel-1 / Sentinel-2](https://dataspace.copernicus.eu) | Before/after imagery | Copernicus free, full and open |
 | [Copernicus DEM GLO-30](https://dataspace.copernicus.eu) | Terrain analysis | See attribution below |
 | [OpenStreetMap via ohsome](https://api.ohsome.org/v1) | Buildings, roads, bridges | ODbL |
-| [Kuro Siwo](https://github.com/Orion-AI-Lab/KuroSiwo) | Training data | MIT / CC BY |
-| [Sen1Floods11](https://github.com/cloudtostreet/Sen1Floods11) | Training data (optional) | CC BY 4.0 |
+| [Kuro Siwo](https://github.com/Orion-AI-Lab/KuroSiwo) | Pre-trained Weights Source | MIT / CC BY |
+| [Sen1Floods11](https://github.com/cloudtostreet/Sen1Floods11) | Pre-trained Weights Source (optional) | CC BY 4.0 |
 | [Copernicus EMS EMSR927](https://mapping.emergency.copernicus.eu) | **Check only** | Free with attribution |
 
 ---
@@ -145,7 +145,7 @@ hydroviz/
 
 > © OpenStreetMap contributors.
 
-**Training data citations:**
+**Pre-trained weights citations:**
 - Bountos, N.I., et al. (2024). Kuro Siwo: A global multi-temporal SAR dataset for rapid flood mapping. *NeurIPS Datasets and Benchmarks*.
 - Bonafilia, D., et al. (2020). Sen1Floods11: A georeferenced dataset to train and test deep learning flood algorithms for Sentinel-1. *CVPR Workshops*.
 

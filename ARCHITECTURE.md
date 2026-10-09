@@ -111,12 +111,12 @@ flowchart TD
         OSM[/"OSM pre-event snapshot<br/>ohsome, dated before 26 Aug 2026"/]
     end
 
-    subgraph TRN["0. Offline training - Python / PyTorch"]
-        KS[/"Kuro Siwo<br/>cite Bountos et al. 2024"/]
-        SF[/"Sen1Floods11 optional<br/>cite Bonafilia et al. 2020"/]
-        TRAIN["Train segmentation model"]
+    subgraph TRN["0. Model Procurement - Pre-trained ONNX (8GB RAM Optimized)"]
+        KS[/"Pre-trained Weights<br/>(e.g., NASA Prithvi-EO or U-Net)"/]
+        SF[/"INT8 Quantization<br/>(Optional size reduction)"/]
+        TRAIN["Convert to ONNX opset 17"]
         EVAL["Evaluate: held-out + unseen<br/>Himalayan scenes, IoU / F1 per class"]
-        ONNX["Export ONNX + model card"]
+        ONNX["Host ONNX + update model card"]
         KS --> TRAIN
         SF --> TRAIN
         TRAIN --> EVAL --> ONNX

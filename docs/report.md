@@ -14,7 +14,7 @@
 
 ## Abstract (0.25 pages)
 
-HydroViz is a prototype system that maps flood damage from free satellite data for rescue teams. Given an area and a flood date, it: (1) detects flooded and debris-covered areas from Sentinel-1 radar change detection, (2) identifies exposed buildings, roads, and bridges using pre-event OpenStreetMap data, (3) determines which settlements have lost road access to towns and hospitals, and (4) uses a trained segmentation model to improve flood detection accuracy. We demonstrate the system on the August 2026 Bhote Koshi–Trishuli flood in Nepal and compare results with Copernicus Emergency Management Service maps. We report limitations honestly, particularly regarding the 10 m resolution, radar shadow in steep terrain, and incomplete OSM coverage.
+HydroViz is a prototype system that maps flood damage from free satellite data for rescue teams. Given an area and a flood date, it: (1) detects flooded and debris-covered areas from Sentinel-1 radar change detection, (2) identifies exposed buildings, roads, and bridges using pre-event OpenStreetMap data, (3) determines which settlements have lost road access to towns and hospitals, and (4) uses a pre-trained segmentation model (optimized for 8GB RAM local deployment) to improve flood detection accuracy. We demonstrate the system on the August 2026 Bhote Koshi–Trishuli flood in Nepal and compare results with Copernicus Emergency Management Service maps. We report limitations honestly, particularly regarding the 10 m resolution, radar shadow in steep terrain, and incomplete OSM coverage.
 
 ---
 
@@ -58,7 +58,7 @@ Five services: ingest (data acquisition), flood-ml (detection), geo-core (analys
 [Description of VV/VH log-ratio, adaptive thresholding, terrain masks]
 
 ### 3.2 Learned Model: Segmentation
-[Architecture (U-Net + terrain channels), training data (Kuro Siwo), loss function, training procedure]
+[Architecture (e.g. lightweight U-Net or Prithvi-EO), pre-trained model origin (e.g. Kuro Siwo or Sen1Floods11), ONNX conversion and INT8 quantization for 8GB RAM optimization]
 
 ### 3.3 Post-Processing
 [Permanent water removal, shadow/layover suppression, minimum mapping unit, confidence assignment]
@@ -86,7 +86,7 @@ Five services: ingest (data acquisition), flood-ml (detection), geo-core (analys
 
 ## 5. AI Component: Evaluation (0.75 pages)
 
-### 5.1 Training Details
+### 5.1 Pre-trained Model Procurement and Optimization
 [Dataset, splits, augmentation, hyperparameters]
 
 ### 5.2 Held-Out Performance

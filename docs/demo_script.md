@@ -13,7 +13,7 @@
 | 0:35 | Results: flood map on dashboard | 30s |
 | 1:05 | Exposure + damage assessment | 25s |
 | 1:30 | Cut-off analysis | 25s |
-| 1:55 | AI model: training + evaluation | 25s |
+| 1:55 | AI model: Pre-trained ONNX deployment | 25s |
 | 2:20 | Situation report (EN + NE) | 15s |
 | 2:35 | Case study: EMSR927 comparison | 15s |
 | 2:50 | Limitations + closing | 10s |
@@ -78,11 +78,11 @@
 
 ### AI Model (1:55 – 2:20)
 
-> "The AI component: we trained a U-Net segmentation model on the Kuro Siwo dataset — over 40 flood events from Sentinel-1. The model learned to distinguish permanent water, floodwater, and dry land."
+> "The AI component: we deployed a lightweight pre-trained U-Net segmentation model using ONNX Runtime. The model was originally trained on the Kuro Siwo dataset — over 40 flood events from Sentinel-1."
 
 *Action: show model evaluation metrics (table or chart).*
 
-> "Challenge: training data is mostly lowland floods. We added terrain channels — slope and height above river — to help the model handle mountains. We evaluated on Himalayan scenes it never saw during training."
+> "Challenge: the base model is trained mostly on lowland floods. We optimized it for 8GB RAM using INT8 quantization and memory chunking, and evaluated it on Himalayan scenes it never saw during training."
 
 *Show: Himalayan evaluation numbers, comparison with baseline.*
 
