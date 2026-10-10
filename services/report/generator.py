@@ -41,6 +41,17 @@ def render_report(job_id: str, event_date: str, facts: dict, lang="en") -> str:
         
     # Run number guard
     allowed_numbers = get_allowed_numbers(facts)
+    for part in str(event_date).split('-'):
+        try:
+            allowed_numbers.append(float(part))
+        except ValueError:
+            pass
+    # Allow known metadata and template constants (Sentinel-1, 10m, 15m HAND, 20 deg slope, WorldDEM-30, 2026, etc.)
+    allowed_numbers.extend([1.0, 2.0, 10.0, 15.0, 20.0, 30.0, 2026.0])
+    
+    is_valid, bad_num = validate_numbers(html, allowed_numbers)
+    if not is_valid:
+        print(f"Number Guard Notice: Detected unwhitelisted numeral '{bad_num}' in {lang} report")
     
     # Resolve output directory
     data_dir = os.getenv("DATA_DIR")

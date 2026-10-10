@@ -459,9 +459,9 @@ def get_case_study_emsr927():
             "emsr927_damaged_bridges": 1
         },
         "methodology_notes": [
-            "Resolution & Sensor: HydroViz uses 10m Sentinel-1 dual-pol SAR (VV/VH) specular drop conditioned on Copernicus DEM HAND (<15m) and slope (<20°), whereas EMSR927 relies on post-event VHR optical photo-interpretation.",
+            "Resolution & Sensor: HydroViz uses 10m Sentinel-1 dual-pol SAR (VV/VH) specular drop conditioned on Copernicus DEM HAND (<15m) and slope (<20 deg), whereas EMSR927 relies on post-event VHR optical photo-interpretation.",
             "Exposure vs Structural Damage: HydroViz measures physical exposure (structures/roads within flood or debris corridor), whereas EMSR927 counts visible structural damage (partially or fully collapsed).",
-            "Steep Terrain Occlusion: Steep north-facing Himalayan gorge slopes (>20°) exhibit radar shadow/layover, which HydroViz transparently masks out."
+            "Steep Terrain Occlusion: Steep north-facing Himalayan gorge slopes (>20 deg) exhibit radar shadow/layover, which HydroViz transparently masks out."
         ]
     }
 
