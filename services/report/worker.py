@@ -34,24 +34,10 @@ async def process_m5_report(job_id: str, event_date: str):
     facts_path = os.path.join(data_dir, "jobs", job_id, "facts.json")
         
     if not os.path.exists(facts_path):
-        # Create minimal fallback facts if missing
-        facts = {
-            "job_id": job_id,
-            "event_date": event_date,
-            "flood": {"flooded_area_km2": 38.4, "mean_confidence": 0.91},
-            "exposure": {
-                "buildings_exposed_high": 142,
-                "roads_exposed_length_m": 18600.0,
-                "bridges_likely_damaged": 4
-            },
-            "cutoff": {
-                "isolated_settlements": 4,
-                "detour_settlements": 6
-            }
-        }
-    else:
-        with open(facts_path, 'r', encoding='utf-8') as f:
-            facts = json.load(f)
+        raise FileNotFoundError(f"Cannot generate report: facts.json for job {job_id} not found at {facts_path}")
+        
+    with open(facts_path, 'r', encoding='utf-8') as f:
+        facts = json.load(f)
             
     # Generate English report
     en_html = render_report(job_id, event_date, facts, lang="en")

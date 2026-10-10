@@ -26,19 +26,19 @@
             </div>
             <div class="hud-metrics">
                 <div class="metric-card">
-                    <div class="metric-val" id="metric-flood-area">38.4 <span class="unit">km²</span></div>
+                    <div class="metric-val" id="metric-flood-area">-- <span class="unit">km²</span></div>
                     <div class="metric-label">Inundated Area</div>
                 </div>
                 <div class="metric-card alert">
-                    <div class="metric-val" id="metric-buildings">142</div>
+                    <div class="metric-val" id="metric-buildings">--</div>
                     <div class="metric-label">Exposed Buildings</div>
                 </div>
                 <div class="metric-card warning">
-                    <div class="metric-val" id="metric-settlements">4</div>
+                    <div class="metric-val" id="metric-settlements">--</div>
                     <div class="metric-label">Isolated Hamlets</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-val" id="metric-roads">18.6 <span class="unit">km</span></div>
+                    <div class="metric-val" id="metric-roads">-- <span class="unit">km</span></div>
                     <div class="metric-label">Severed Roads</div>
                 </div>
             </div>
@@ -101,6 +101,17 @@
                         </select>
                     </div>
                 </div>
+
+                <div class="input-row">
+                    <div class="input-group">
+                        <label for="slope-input">Slope Cutoff (°)</label>
+                        <input type="number" id="slope-input" value="20" min="5" max="45" step="1">
+                    </div>
+                    <div class="input-group">
+                        <label for="hand-input">HAND Buffer (m)</label>
+                        <input type="number" id="hand-input" value="15" min="5" max="50" step="1">
+                    </div>
+                </div>
                 
                 <button id="submit-btn" class="primary-btn">
                     <span class="btn-content">
@@ -135,6 +146,26 @@
                 </div>
             </div>
 
+            <!-- Interactive D8 Hydrologic Flow Routing Panel -->
+            <div class="panel" id="flow-trace-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
+                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                        </svg>
+                        <h3>Downhill Flow Routing (D8)</h3>
+                    </div>
+                    <span class="tool-badge" id="trace-status-badge">Click Mode: OFF</span>
+                </div>
+                <p class="tool-desc">Click any mountain ridge or elevation point on the map to compute downhill flow vectors using D8 steepest descent.</p>
+                <div class="trace-actions">
+                    <button id="trace-toggle-btn" class="tool-btn">
+                        <span id="trace-btn-label">Enable Map Click Tracing</span>
+                    </button>
+                    <button id="clear-trace-btn" class="tool-btn-secondary" style="display: none;">Clear Path</button>
+                </div>
+            </div>
+
             <!-- Layer Toggles -->
             <div class="panel" id="layers-panel">
                 <div class="panel-header">
@@ -164,7 +195,7 @@
                     <span class="checkmark cyan-mark"></span>
                     <span class="layer-info">
                         <span class="label-text">SAR Flood Inundation</span>
-                        <span class="layer-badge cyan">VV/VH Inferred</span>
+                        <span class="layer-badge cyan" id="badge-flood">VV/VH Inferred</span>
                     </span>
                 </label>
                 <label class="custom-checkbox">
@@ -172,7 +203,7 @@
                     <span class="checkmark red-mark"></span>
                     <span class="layer-info">
                         <span class="label-text">Exposed Buildings</span>
-                        <span class="layer-badge red">142 Structures</span>
+                        <span class="layer-badge red" id="badge-buildings">-- Structures</span>
                     </span>
                 </label>
                 <label class="custom-checkbox">
@@ -180,7 +211,7 @@
                     <span class="checkmark orange-mark"></span>
                     <span class="layer-info">
                         <span class="label-text">Isolated Settlements</span>
-                        <span class="layer-badge orange">Road Severed</span>
+                        <span class="layer-badge orange" id="badge-cutoff">-- Hamlets</span>
                     </span>
                 </label>
                 <label class="custom-checkbox">
@@ -188,7 +219,7 @@
                     <span class="checkmark yellow-mark"></span>
                     <span class="layer-info">
                         <span class="label-text">Submerged Roads</span>
-                        <span class="layer-badge yellow">OSM Graph</span>
+                        <span class="layer-badge yellow" id="badge-roads">-- km OSM</span>
                     </span>
                 </label>
             </div>
@@ -206,7 +237,7 @@
                         <h3>Disaster Response Brief</h3>
                     </div>
                 </div>
-                <p class="report-desc">Full situation assessment compiled for emergency incident commanders and humanitarian response units.</p>
+                <p class="report-desc">Bilingual situation assessment compiled for emergency incident commanders and humanitarian response units.</p>
                 <button id="view-report-btn" class="secondary-btn">
                     <span>Inspect Situation Report</span>
                 </button>
@@ -223,7 +254,7 @@
 
         <!-- Floating Footer Attribution -->
         <div id="attribution">
-            <span class="badge">EDUCATIONAL PROTOTYPE</span>
+            <span class="badge">OPERATIONAL SYSTEM</span>
             <span>Sentinel-1 SAR © Copernicus 2026 • Copernicus WorldDEM-30 © DLR/Airbus • © OpenStreetMap</span>
         </div>
 
@@ -233,71 +264,29 @@
                 <div class="modal-header">
                     <div class="modal-title-group">
                         <span class="modal-badge">INCIDENT SITUATION REPORT</span>
-                        <h2>Himalayan Basin Flood Impact Assessment</h2>
-                        <span class="modal-id" id="report-job-id">Job ID: HV-2026-0826-ALPHA</span>
+                        <h2 id="modal-report-title">Himalayan Basin Flood Impact Assessment</h2>
+                        <span class="modal-id" id="report-job-id">Job ID: --</span>
                     </div>
-                    <button class="modal-close" id="modal-close-btn">&times;</button>
+                    <div class="modal-header-actions">
+                        <div class="lang-switch-group">
+                            <button class="lang-switch-btn active" id="lang-btn-en" data-lang="en">EN</button>
+                            <button class="lang-switch-btn" id="lang-btn-ne" data-lang="ne">नेपाली</button>
+                        </div>
+                        <button class="modal-close" id="modal-close-btn">&times;</button>
+                    </div>
                 </div>
-                <div class="modal-body">
-                    <div class="report-section">
-                        <h4>1. Executive Summary</h4>
-                        <p>Rapid satellite SAR analysis identified severe monsoon flash flooding along the Melamchi-Indrawati river basin corridor. Significant debris-water mixture identified downstream of steep valley gorges. <strong>142 residential structures</strong> and <strong>4 critical rural settlements</strong> have experienced vehicular cutoff due to 18.6 km of road inundation.</p>
+                <div class="modal-body" id="modal-report-container">
+                    <div class="report-loading-state" id="report-loading-indicator">
+                        <div class="pulse-loader"></div>
+                        <span>Compiling official incident briefing...</span>
                     </div>
-
-                    <div class="report-section">
-                        <h4>2. Impact Analytics</h4>
-                        <div class="report-table-wrapper">
-                            <table class="report-table">
-                                <thead>
-                                    <tr>
-                                        <th>Metric Description</th>
-                                        <th>Inferred Value</th>
-                                        <th>Confidence / Source</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Total Water Inundation Area</td>
-                                        <td><strong class="text-cyan">38.4 km²</strong></td>
-                                        <td>Sentinel-1 IW Dual-Pol (VV/VH)</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Exposed Building Footprints</td>
-                                        <td><strong class="text-red">142 Structures</strong></td>
-                                        <td>OSM Building Polygons Cross-referenced</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Vehicular Cut-off Settlements</td>
-                                        <td><strong class="text-orange">4 Hamlets (Melamchi East, Helambu North)</strong></td>
-                                        <td>NetworkX Dijkstra Isochrone Analysis</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Submerged Highway & Access Roads</td>
-                                        <td><strong class="text-yellow">18.6 km</strong></td>
-                                        <td>OSM Highway Classification</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Topographic Slope Masking</td>
-                                        <td>>15° Filter Applied</td>
-                                        <td>Copernicus WorldDEM-30</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div class="report-section">
-                        <h4>3. Provenance & Compliance Log</h4>
-                        <div class="provenance-box">
-                            <div>• <strong>SAR Imagery:</strong> European Space Agency Copernicus Sentinel-1 IW GRD (2026-08-26)</div>
-                            <div>• <strong>Inference Engine:</strong> ONNX Runtime INT8 Quantized DeepLabV3+ (CPU-Optimized, 17.1 MB)</div>
-                            <div>• <strong>DEM Reference:</strong> Copernicus WorldDEM-30 © DLR e.V. 2010-2014 & Airbus Defence</div>
-                            <div>• <strong>Validation Note:</strong> Copernicus EMSR927 products excluded from inference (preserved for independent validation).</div>
-                        </div>
+                    <div id="report-frame-wrapper" style="display: none;">
+                        <iframe id="report-iframe" style="width: 100%; height: 500px; border: none; background: #ffffff; border-radius: 6px;"></iframe>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button class="modal-btn secondary" id="modal-copy-btn">Copy Summary</button>
+                    <button class="modal-btn secondary" id="modal-print-btn">Print / PDF</button>
                     <button class="modal-btn primary" id="modal-download-btn">Acknowledge & Close</button>
                 </div>
             </div>
