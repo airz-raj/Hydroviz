@@ -43,15 +43,15 @@ def render_report(job_id: str, event_date: str, facts: dict, lang="en") -> str:
     allowed_numbers = get_allowed_numbers(facts)
     
     # Resolve output directory
-    data_dir = os.getenv("DATA_DIR", "/data")
-    if not os.path.exists(data_dir):
-        if not os.path.isabs(data_dir):
-            data_dir = os.path.abspath(data_dir)
+    data_dir = os.getenv("DATA_DIR")
+    if not data_dir:
+        local_data = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
+        if os.path.exists(local_data):
+            data_dir = local_data
+        elif os.name != 'nt' and os.path.exists('/data'):
+            data_dir = '/data'
         else:
-            try:
-                os.makedirs(data_dir, exist_ok=True)
-            except Exception:
-                data_dir = os.path.abspath("./data")
+            data_dir = os.path.abspath("./data")
     out_dir = os.path.join(data_dir, "jobs", job_id, "reports")
     os.makedirs(out_dir, exist_ok=True)
     

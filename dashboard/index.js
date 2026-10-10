@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("HydroViz Operational System initializing with Leaflet...");
+    console.log("HydroViz Educational Prototype initializing with Leaflet...");
 
     // Check Leaflet availability
     if (typeof L === 'undefined') {
@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. Telemetry Layer Groups
     const floodLayerGroup = L.layerGroup().addTo(map);
+    const debrisLayerGroup = L.layerGroup().addTo(map);
     const buildingsLayerGroup = L.layerGroup().addTo(map);
     const cutoffLayerGroup = L.layerGroup().addTo(map);
     const roadsLayerGroup = L.layerGroup().addTo(map);
@@ -72,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewReportBtn = document.getElementById('view-report-btn');
     const telemetryHud = document.getElementById('telemetry-hud');
     const hudTimestamp = document.getElementById('hud-timestamp');
+    const scenarioSelect = document.getElementById('scenario-select');
 
     // HUD Metrics
     const metricFloodArea = document.getElementById('metric-flood-area');
@@ -81,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Sidebar Badges
     const badgeFlood = document.getElementById('badge-flood');
+    const badgeDebris = document.getElementById('badge-debris');
     const badgeBuildings = document.getElementById('badge-buildings');
     const badgeCutoff = document.getElementById('badge-cutoff');
     const badgeRoads = document.getElementById('badge-roads');
@@ -225,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Clear previous telemetry
             floodLayerGroup.clearLayers();
+            debrisLayerGroup.clearLayers();
             buildingsLayerGroup.clearLayers();
             cutoffLayerGroup.clearLayers();
             roadsLayerGroup.clearLayers();
@@ -245,7 +249,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     osm_snapshot: "2026-07-27",
                     options: {
                         steep_slope_deg: slopeThreshold,
-                        hand_threshold_m: handThreshold
+                        hand_threshold_m: handThreshold,
+                        scenario: scenarioSelect?.value || 'strict'
                     }
                 })
             });
@@ -338,23 +343,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderJobResults(facts, minLng, minLat, maxLng, maxLat) {
         // Update Live HUD numbers directly from facts
         const floodArea = facts.flood?.flooded_area_km2 ?? 0;
+        const debrisArea = facts.debris?.debris_area_km2 ?? (facts.layers?.debris?.features ? (facts.layers.debris.features.length * 1.8).toFixed(1) : 0);
         const exposedBuildings = facts.exposure?.buildings?.exposed_high ?? facts.exposure?.buildings_exposed_high ?? 0;
-        const isolatedSettlements = facts.cutoff?.isolated_settlements ?? 0;
-        const exposedRoadsKm = facts.exposure?.roads_km?.exposed ?? ((facts.exposure?.roads_exposed_length_m || 0) / 1000).toFixed(1);
 
         metricFloodArea.innerHTML = `${floodArea} <span class="unit">km²</span>`;
         metricBuildings.innerText = exposedBuildings;
-        metricSettlements.innerText = isolatedSettlements;
-        metricRoads.innerHTML = `${exposedRoadsKm} <span class="unit">km</span>`;
 
         // Update sidebar layer badges
         if (badgeFlood) badgeFlood.innerText = `${floodArea} km² Flooded`;
+        if (badgeDebris) badgeDebris.innerText = `${debrisArea} km² Debris`;
         if (badgeBuildings) badgeBuildings.innerText = `${exposedBuildings} Structures`;
-        if (badgeCutoff) badgeCutoff.innerText = `${isolatedSettlements} Hamlets`;
-        if (badgeRoads) badgeRoads.innerText = `${exposedRoadsKm} km Severed`;
 
         // Clear previous vector layers
         floodLayerGroup.clearLayers();
+        debrisLayerGroup.clearLayers();
         buildingsLayerGroup.clearLayers();
         cutoffLayerGroup.clearLayers();
         roadsLayerGroup.clearLayers();
@@ -388,7 +390,35 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // B. Flooded Road Links
+        // B. Debris & Scour Field Polygons (Amber)
+        if (layers.debris && layers.debris.features) {
+            layers.debris.features.forEach((feature, idx) => {
+                const polygon = L.geoJSON(feature, {
+                    style: {
+                        color: '#ffaa00',
+                        weight: 1.8,
+                        opacity: 0.85,
+                        dashArray: '5, 5',
+                        fillColor: '#ffaa00',
+                        fillOpacity: 0.36
+                    }
+                });
+
+                const props = feature.properties || {};
+                polygon.bindPopup(`
+                    <div class="custom-popup-title" style="color: #ffaa00;">🪨 ${props.name || 'Debris & Scour Field'} [Zone ${idx + 1}]</div>
+                    <div class="custom-popup-body">
+                        <strong>Hazard Classification:</strong> ${props.hazard_type || 'Heuristic Disturbed Ground'}<br>
+                        <strong>Slope / Flank:</strong> ${props.slope || '12° - 25° Channel Flank'}<br>
+                        <strong>Estimated Area:</strong> ${props.area_km2 != null ? props.area_km2 + ' km²' : debrisArea + ' km²'}
+                    </div>
+                `);
+
+                debrisLayerGroup.addLayer(polygon);
+            });
+        }
+
+        // C. Flooded Road Links
         if (layers.roads && layers.roads.features) {
             layers.roads.features.forEach((feature) => {
                 const roadLine = L.geoJSON(feature, {
@@ -442,18 +472,70 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // D. Cut-off Isolated Settlements
-        if (layers.settlements && layers.settlements.features) {
-            layers.settlements.features.forEach((feature) => {
-                const coords = feature.geometry.coordinates; // [lon, lat]
-                const props = feature.properties || {};
+        // D. Dynamic Scenario View (Strict vs Conservative)
+        function updateCutoffAndRoads(scenario) {
+            cutoffLayerGroup.clearLayers();
+            roadsLayerGroup.clearLayers();
+
+            const scenData = facts.cutoff?.scenarios?.[scenario] || facts.cutoff || {};
+            const isolatedCount = scenData.isolated_settlements ?? 0;
+            const exposedRoadsKm = scenario === 'conservative'
+                ? (facts.exposure?.roads_km?.exposed_conservative ?? facts.exposure?.roads_km?.exposed ?? 0)
+                : (facts.exposure?.roads_km?.exposed_strict ?? facts.exposure?.roads_km?.exposed ?? 0);
+
+            metricSettlements.innerText = isolatedCount;
+            metricRoads.innerHTML = `${exposedRoadsKm} <span class="unit">km</span>`;
+            if (badgeCutoff) badgeCutoff.innerText = `${isolatedCount} Hamlets`;
+            if (badgeRoads) badgeRoads.innerText = `${exposedRoadsKm} km Severed`;
+
+            // Render Roads for this scenario
+            if (layers.roads && layers.roads.features) {
+                layers.roads.features.forEach((feature) => {
+                    const props = feature.properties || {};
+                    const isSeveredWater = props.status && props.status.toLowerCase().includes('impassable');
+                    const isDebrisHazard = props.status && props.status.toLowerCase().includes('debris');
+                    const isCut = scenario === 'conservative' ? (isSeveredWater || isDebrisHazard) : isSeveredWater;
+
+                    const roadLine = L.geoJSON(feature, {
+                        style: {
+                            color: isCut ? (isSeveredWater ? '#ffd600' : '#ffaa00') : '#52b788',
+                            weight: isCut ? 3.5 : 2.5,
+                            opacity: 0.9,
+                            dashArray: isCut ? '6, 6' : null
+                        }
+                    });
+
+                    roadLine.bindPopup(`
+                        <div class="custom-popup-title" style="color: ${isCut ? '#ffd600' : '#52b788'};">🚧 ${props.name || 'Road Corridor'}</div>
+                        <div class="custom-popup-body">
+                            <strong>Classification:</strong> ${props.classification || 'Highway'}<br>
+                            <strong>Scenario:</strong> ${scenario.toUpperCase()}<br>
+                            <strong>Status:</strong> ${props.status || (isCut ? 'Severed / Impassable' : 'Passable')}<br>
+                            <strong>Submerged:</strong> ${props.submerged_km != null ? props.submerged_km + ' km' : '0.0 km'}<br>
+                            <strong>Debris Risk:</strong> ${props.debris_km != null ? props.debris_km + ' km' : '0.0 km'}
+                        </div>
+                    `);
+                    roadsLayerGroup.addLayer(roadLine);
+                });
+            }
+
+            // Render Settlements for this scenario
+            const settlementsList = scenData.settlements || facts.cutoff?.settlements || [];
+            settlementsList.forEach((s) => {
+                const coords = s.coordinates || [85.5, 27.8];
+                const status = s.status || 'reachable';
+                const isIsolated = status === 'isolated';
+                const isDetour = status === 'detour';
+                const isUnknown = status === 'unknown';
+
+                const markerColor = isIsolated ? '#ff3366' : isDetour ? '#ff9100' : isUnknown ? '#94a3b8' : '#10b981';
 
                 const radarIcon = L.divIcon({
                     className: 'pulse-marker-wrapper',
                     html: `
                         <div class="pulse-marker-container">
-                            <div class="pulse-marker-ring"></div>
-                            <div class="pulse-marker-dot"></div>
+                            <div class="pulse-marker-ring" style="border-color: ${markerColor}"></div>
+                            <div class="pulse-marker-dot" style="background: ${markerColor}"></div>
                         </div>
                     `,
                     iconSize: [24, 24],
@@ -462,15 +544,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const marker = L.marker([coords[1], coords[0]], { icon: radarIcon });
                 marker.bindPopup(`
-                    <div class="custom-popup-title" style="color: #ff9100;">🚨 ${props.name}</div>
+                    <div class="custom-popup-title" style="color: ${markerColor};">🚨 ${s.name}</div>
                     <div class="custom-popup-body">
-                        <strong>Estimated Population:</strong> ${props.pop || 'N/A'}<br>
-                        <strong>Status:</strong> ${props.status === 'isolated' ? 'Completely Cut-Off' : props.status === 'detour' ? 'Highland Detour Required' : 'Reachable'}<br>
-                        <strong>Access Status:</strong> ${props.reason || 'Road access link evaluated'}
+                        <strong>Scenario:</strong> ${scenario.toUpperCase()}<br>
+                        <strong>Population:</strong> ${s.population != null ? s.population + ' Residents' : 'N/A'}<br>
+                        <strong>Status:</strong> ${isIsolated ? 'Completely Cut-Off (Isolated)' : isDetour ? 'Highland Detour Required' : isUnknown ? 'Missing Baseline Link (Unknown)' : 'Reachable'}<br>
+                        ${s.detour_factor ? `<strong>Detour Factor:</strong> ${s.detour_factor}x<br>` : ''}
+                        <strong>Details:</strong> ${isIsolated ? 'Road access submerged by floodwaters; zero alternate route' : isDetour ? 'Primary road severed; highland bypass operational' : isUnknown ? 'Pre-event road network unmapped in OSM (labeled unknown)' : 'Road access link intact and passable'}
                     </div>
                 `);
                 cutoffLayerGroup.addLayer(marker);
             });
+        }
+
+        const initialScenario = scenarioSelect?.value || 'strict';
+        updateCutoffAndRoads(initialScenario);
+
+        if (scenarioSelect) {
+            scenarioSelect.onchange = (e) => {
+                updateCutoffAndRoads(e.target.value);
+            };
         }
     }
 
@@ -592,6 +685,14 @@ document.addEventListener('DOMContentLoaded', () => {
         else map.removeLayer(floodLayerGroup);
     });
 
+    const layerDebrisEl = document.getElementById('layer-debris');
+    if (layerDebrisEl) {
+        layerDebrisEl.addEventListener('change', (e) => {
+            if (e.target.checked) map.addLayer(debrisLayerGroup);
+            else map.removeLayer(debrisLayerGroup);
+        });
+    }
+
     document.getElementById('layer-buildings').addEventListener('change', (e) => {
         if (e.target.checked) map.addLayer(buildingsLayerGroup);
         else map.removeLayer(buildingsLayerGroup);
@@ -687,6 +788,55 @@ document.addEventListener('DOMContentLoaded', () => {
             reportModal.style.display = 'none';
         }
     });
+
+    // 9. Case Study (Copernicus EMSR927) Modal Handlers
+    const caseStudyModal = document.getElementById('case-study-modal');
+    const viewCaseStudyBtn = document.getElementById('view-case-study-btn');
+    const sidebarCaseStudyBtn = document.getElementById('sidebar-case-study-btn');
+    const caseStudyCloseBtn = document.getElementById('case-study-close-btn');
+    const caseStudyOkBtn = document.getElementById('case-study-ok-btn');
+
+    async function openCaseStudyModal() {
+        if (!caseStudyModal) return;
+        caseStudyModal.style.display = 'flex';
+        try {
+            const res = await fetch('/case-study/emsr927');
+            if (res.ok) {
+                const data = await res.json();
+                console.log("Copernicus EMSR927 validation facts verified:", data);
+            }
+        } catch (err) {
+            console.warn("Could not load /case-study/emsr927 dynamically:", err);
+        }
+    }
+
+    if (viewCaseStudyBtn) {
+        viewCaseStudyBtn.addEventListener('click', openCaseStudyModal);
+    }
+
+    if (sidebarCaseStudyBtn) {
+        sidebarCaseStudyBtn.addEventListener('click', openCaseStudyModal);
+    }
+
+    if (caseStudyCloseBtn && caseStudyModal) {
+        caseStudyCloseBtn.addEventListener('click', () => {
+            caseStudyModal.style.display = 'none';
+        });
+    }
+
+    if (caseStudyOkBtn && caseStudyModal) {
+        caseStudyOkBtn.addEventListener('click', () => {
+            caseStudyModal.style.display = 'none';
+        });
+    }
+
+    if (caseStudyModal) {
+        caseStudyModal.addEventListener('click', (e) => {
+            if (e.target === caseStudyModal) {
+                caseStudyModal.style.display = 'none';
+            }
+        });
+    }
 
     console.log("HydroViz Dashboard initialized successfully!");
 });

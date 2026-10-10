@@ -94,6 +94,20 @@
 **Rationale:** Preserves 100% strict JSON schema validation while allowing robust Jinja/string replacement without breaking existing templates or API consumers.
 **Status:** Accepted
 
+### D010 — Physics-Conditioned Sinuous Valley Inundation vs Uniform DEM Artifacts
+**Date:** 2026-10-10
+**Context:** Uniform background DEM values and raw global thresholding generated massive rectangular false-positive flood polygons and unrealistically huge flood areas with 286m water depths.
+**Decision:** Condition SAR specular drop detection on Copernicus DEM HAND (<15m) and steep-slope masking (<20°), strictly confining flood corridors to sinuous Himalayan mountain river channels with authentic water depths (0.8m–2.4m).
+**Rationale:** Complies with Section 2 & 6.2 rules prohibiting giant rectangular bounding boxes and enforcing physical topographic reality in Himalayan gorges.
+**Status:** Accepted
+
+### D011 — Dual Cutoff Scenarios (Strict vs Conservative) & One-Way EMSR927 Isolation
+**Date:** 2026-10-10
+**Context:** Disaster responders require both confirmed floodwater impact and precautionary debris scour assessments. Furthermore, Copernicus EMSR927 must be strictly check-only per Section 2 & 8 rules.
+**Decision:** Implemented dual multi-source Dijkstra routing (Strict: confirmed floodwater only; Conservative: floodwater + debris scour) with live client-side scenario switching. EMSR927 validation is hosted on a dedicated read-only endpoint (`/case-study/emsr927`) and displayed via a check-only benchmark modal without feeding back into pipeline parameters.
+**Rationale:** Meets Track B scoring criteria for cutoff analysis and strict independence from reference damage maps.
+**Status:** Accepted
+
 ---
 
 ## Open Questions (from AGENT_BRIEF §12)
