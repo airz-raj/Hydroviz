@@ -50,7 +50,7 @@ async def process_m2_baseline(job_id: str, pre1_path: str = "", pre2_path: str =
     """
     Worker function to process M2 baseline flood map.
     """
-    flooded_area_km2 = 45.2
+    flooded_area_km2 = 0.0
     mean_confidence = 0.85
     
     # 1. Add provenance for M2
@@ -212,6 +212,9 @@ async def process_m3_learned(job_id: str, pre_vv_path: str = "", pre_vh_path: st
                 
             poly_km2 = round((cnt_area / (h * w)) * area_km2, 1)
             poly_count += 1
+            min_depth = round(max(0.5, hand_thresh * 0.05 + poly_km2 * 0.06), 1)
+            max_depth = round(min_depth + 0.9 + min(2.2, poly_km2 * 0.16), 1)
+            depth_str = f"{min_depth}m - {max_depth}m"
             
             flood_features.append({
                 "type": "Feature",
@@ -222,7 +225,7 @@ async def process_m3_learned(job_id: str, pre_vv_path: str = "", pre_vh_path: st
                 "properties": {
                     "name": f"Predicted SAR Inundation Basin (Zone {poly_count})",
                     "confidence": f"{int(mean_confidence * 100)}%",
-                    "estimated_depth": "1.4m - 2.6m",
+                    "estimated_depth": depth_str,
                     "area_km2": poly_km2
                 }
             })

@@ -8,11 +8,11 @@ OVERPASS_ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter"
 ]
 
-def fetch_real_osm_features(bbox: List[float], timeout_sec: float = 6.0) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def fetch_real_osm_features(bbox: List[float], timeout_sec: float = 6.0) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
-    Queries OpenStreetMap Overpass API for real settlements and road networks
+    Queries OpenStreetMap Overpass API for real settlements, road networks, and bridges
     within the specified bounding box: [min_lon, min_lat, max_lon, max_lat].
-    Returns (settlements, roads).
+    Returns (settlements, roads, bridges).
     """
     min_lon, min_lat, max_lon, max_lat = bbox
     headers = {"User-Agent": "HydroViz-Disaster-Response/1.0"}
@@ -22,7 +22,7 @@ def fetch_real_osm_features(bbox: List[float], timeout_sec: float = 6.0) -> Tupl
     q_settlements = f"""
     [out:json][timeout:10];
     node["place"~"town|village|hamlet"]({min_lat},{min_lon},{max_lat},{max_lon});
-    out body 20;
+    out body 25;
     """
     for endpoint in OVERPASS_ENDPOINTS:
         try:
@@ -47,7 +47,7 @@ def fetch_real_osm_features(bbox: List[float], timeout_sec: float = 6.0) -> Tupl
     q_roads = f"""
     [out:json][timeout:10];
     way["highway"~"primary|secondary|tertiary|trunk|unclassified"]({min_lat},{min_lon},{max_lat},{max_lon});
-    out geom 25;
+    out geom 30;
     """
     for endpoint in OVERPASS_ENDPOINTS:
         try:
@@ -68,5 +68,32 @@ def fetch_real_osm_features(bbox: List[float], timeout_sec: float = 6.0) -> Tupl
                     break
         except Exception:
             continue
+
+    # 3. Fetch Bridges
+    bridges = []
+    q_bridges = f"""
+    [out:json][timeout:10];
+    way["bridge"="yes"]({min_lat},{min_lon},{max_lat},{max_lon});
+    out center 20;
+    """
+    for endpoint in OVERPASS_ENDPOINTS:
+        try:
+            r = httpx.post(endpoint, data={"data": q_bridges}, headers=headers, timeout=timeout_sec)
+            if r.status_code == 200:
+                for el in r.json().get("elements", []):
+                    center = el.get("center", {})
+                    if "lat" in center and "lon" in center:
+                        name = el.get("tags", {}).get("name:en") or el.get("tags", {}).get("name") or f"Bridge #{el['id']}"
+                        bridges.append({
+                            "osm_id": el["id"],
+                            "name": str(name),
+                            "lat": float(center["lat"]),
+                            "lon": float(center["lon"]),
+                            "highway": el.get("tags", {}).get("highway", "bridge")
+                        })
+                if bridges:
+                    break
+        except Exception:
+            continue
             
-    return settlements, roads
+    return settlements, roads, bridges

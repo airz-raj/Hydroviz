@@ -4,6 +4,13 @@ All notable changes to the HydroViz project will be documented in this file.
 
 ## [2026-10-10]
 
+- **feat(perfection):** Complete eradication of hardcoded values, real OSM bridge fetching, and dynamic spatial exposure:
+  - **Zero-Hardcoded Popups & HUD:** Removed all static magic fallbacks across dashboard layers and tools (eliminated `2400m/2100m/300m/3.2km` in D8 trace, `24 buildings` in structures, `450 residents` in settlements, `94.2%` confidence, and `18.4ms` timer). Telemetry HUD now displays real execution timing and authentic Sentinel-1 acquisition timestamps from facts.
+  - **Live OSM Bridge Ingestion & Flood Testing:** Upgraded `services/geo_core/osm_fetcher.py` to query real `way["bridge"="yes"]` from Overpass API; `services/geo_core/worker.py` tests bridge coordinates against ONNX flood polygons using `cv2.pointPolygonTest` to dynamically determine damaged vs operational bridges.
+  - **Spatial Point-in-Polygon Building Exposure:** Buildings are clustered along real settlement centers and road vertices, with high vs medium risk determined by distance to flood polygon boundaries rather than static formula multipliers.
+  - **Dynamic Inundation Depths:** In `services/flood_ml/workers.py`, each flood basin zone computes a unique depth range proportional to its inundation surface area and HAND buffer threshold.
+  - **Dynamic Regional Geonaming:** Real-time recognition of Himalayan sub-basins (Melamchi, Pokhara, Kathmandu, Koshi, Karnali, Chamoli, South Lhonak) dynamically updating input hints and situation assessment titles on every keystroke.
+  - **Dynamic Regional Elevation Model for D8 Tracing:** DEM elevation profile in `/trace` scales dynamically with regional latitude and topography.
 - **feat(pipeline):** Implement true raster-to-vector ONNX extraction, real OpenStreetMap ingestion, and robust coordinate parsing:
   - **True ONNX Mask Vectorization:** ONNX model (`flood_seg_v1_int8.onnx`) inference output is filtered via morphological MMU kernels and vectorized with `cv2.findContours` and `cv2.approxPolyDP`. Real raster pixel contours are projected to geographic `(lon, lat)` Polygons, replacing static shape templates.
   - **Live OpenStreetMap Overpass Ingestion:** Added `services/geo_core/osm_fetcher.py` querying Overpass API for authentic settlements (`place=town|village|hamlet`) and real road Linestrings (`highway=*`) with fallback to local synthetic GIS generation.

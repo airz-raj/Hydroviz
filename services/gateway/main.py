@@ -306,17 +306,20 @@ def trace_flood_path(request: TraceRequest):
     lons = [lon0 + d_span * (c / (grid_size - 1) - 0.5) for c in range(grid_size)]
     mid_lon = (min_lon + max_lon) / 2.0
     
+    lat_gradient = max(0.0, (lat0 - 26.5)) * 1400.0
+    base_elev_origin = max(250.0, 400.0 + lat_gradient)
+
     grid = []
     for r in range(grid_size):
         row = []
         r_lat = lats[r]
         for c in range(grid_size):
             c_lon = lons[c]
-            base_elev = 2200.0 + (r_lat - min_lat) * 2000.0
+            r_elev_grad = (r_lat - min_lat) * 1200.0
             valley_dist = abs(c_lon - mid_lon)
-            trough = 350.0 * (1.0 - math.exp(-valley_dist * 40.0))
+            trough = 280.0 * (1.0 - math.exp(-valley_dist * 40.0))
             ripple = 8.0 * math.sin(r * 0.8) + 6.0 * math.cos(c * 0.7)
-            elev = max(700.0, base_elev + trough + ripple)
+            elev = max(180.0, base_elev_origin + r_elev_grad + trough + ripple)
             row.append(round(elev, 1))
         grid.append(row)
         
