@@ -1,12 +1,5 @@
 # HydroViz — Himalayan Flood Response Prototype
 
-> Multimodal AI Hackathon 2026 · Track B: Mapping Flood Damage from Space
-
-> ⚠️ **A note on responsibility:**
-> This disaster is recent, and many families are still affected. Treat the topic with respect: do not use images of victims in demos or reports. Systems built here are educational prototypes, not operational tools.
-
----
-
 ## What It Does
 
 Given an **area (bbox)** and a **flood date**, HydroViz uses free satellite data to answer three questions for rescue teams:
