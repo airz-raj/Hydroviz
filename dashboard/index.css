@@ -727,6 +727,24 @@ input:focus, select.custom-select:focus {
     gap: 10px;
 }
 
+.info-pill-btn {
+    background: rgba(0, 229, 255, 0.12);
+    border: 1px solid rgba(0, 229, 255, 0.3);
+    color: var(--cyan);
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.info-pill-btn:hover {
+    background: var(--cyan);
+    color: #06080b;
+    box-shadow: 0 0 8px var(--cyan-glow);
+}
+
 .badge {
     background: rgba(0, 229, 255, 0.15);
     color: var(--cyan);

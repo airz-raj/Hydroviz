@@ -9,6 +9,7 @@ ATTRIBUTION_OSM = "© OpenStreetMap contributors."
 ATTRIBUTION_EMS = "European Union, Copernicus Emergency Management Service data"
 ATTRIBUTION_KURO_SIWO = "Bountos, N.I., et al. (2024). Kuro Siwo: A global multi-temporal SAR dataset for rapid flood mapping. NeurIPS Datasets and Benchmarks."
 ATTRIBUTION_SEN1FLOODS11 = "Bonafilia, D., et al. (2020). Sen1Floods11: A georeferenced dataset to train and test deep learning flood algorithms for Sentinel-1. CVPR Workshops."
+RESPONSIBILITY_NOTE = "A note on responsibility: This disaster is recent, and many families are still affected. Treat the topic with respect: do not use images of victims in demos or reports. Systems built here are educational prototypes, not operational tools."
 
 _provenance_lock = threading.Lock()
 _job_provenance: Dict[str, List[Dict[str, Any]]] = {}
@@ -20,7 +21,8 @@ def get_all_attributions() -> Dict[str, str]:
         "osm": ATTRIBUTION_OSM,
         "ems": ATTRIBUTION_EMS,
         "kuro_siwo": ATTRIBUTION_KURO_SIWO,
-        "sen1floods11": ATTRIBUTION_SEN1FLOODS11
+        "sen1floods11": ATTRIBUTION_SEN1FLOODS11,
+        "responsibility": RESPONSIBILITY_NOTE
     }
 
 def add_provenance(job_id: str, stage: str, metadata: Dict[str, Any]) -> None:

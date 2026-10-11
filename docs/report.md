@@ -201,14 +201,17 @@ In compliance with hackathon rules, HydroViz explicitly documents what the syste
 
 ## 10. Humanitarian Responsibility & Attribution
 
+> **A note on responsibility:**
+> This disaster is recent, and many families are still affected. Treat the topic with respect: do not use images of victims in demos or reports. Systems built here are educational prototypes, not operational tools.
+
 - **Respect for Affected Populations:** HydroViz strictly contains no imagery of victims, casualty estimates, or unverified claims.
 - **Devanagari Number Guard:** Situation reports in Nepali (`ne`) and English (`en`) pass all rendered numerals through an automated whitelist audit against `facts.json`, ensuring zero hallucinated statistics.
-- **Required Attributions:**
+- **Required Attributions (Every Submission):**
   - *Contains modified Copernicus Sentinel data 2026.*
   - *Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.*
-  - *© OpenStreetMap contributors (ODbL).*
-  - *Copernicus Emergency Management Service data (EMSR927).*
-  - *Model citations: Bountos et al. (Kuro Siwo, NeurIPS 2024); Bonafilia et al. (Sen1Floods11, CVPR 2020).*
+  - *© OpenStreetMap contributors.*
+  - *Training dataset citations:* Bountos et al. (Kuro Siwo, NeurIPS 2024); Bonafilia et al. (Sen1Floods11, CVPR 2020).
+  - *Validation data:* European Union, Copernicus Emergency Management Service data (EMSR927 activation — strictly check-only).
 
 ---
 *HydroViz is an open-source educational prototype built for the Multimodal AI Hackathon 2026. It is not certified for operational life-safety decisions.*

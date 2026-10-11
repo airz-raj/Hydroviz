@@ -2,7 +2,8 @@
 
 > Multimodal AI Hackathon 2026 · Track B: Mapping Flood Damage from Space
 
-⚠️ **Educational prototype — not for operational decisions.**
+> ⚠️ **A note on responsibility:**
+> This disaster is recent, and many families are still affected. Treat the topic with respect: do not use images of victims in demos or reports. Systems built here are educational prototypes, not operational tools.
 
 ---
 
@@ -170,8 +171,12 @@ hydroviz/
 
 ---
 
-## Required Attribution
+## Required Attribution & Humanitarian Responsibility
 
+### A note on responsibility:
+> This disaster is recent, and many families are still affected. Treat the topic with respect: do not use images of victims in demos or reports. Systems built here are educational prototypes, not operational tools.
+
+### Mandatory Submission Attribution:
 > Contains modified Copernicus Sentinel data 2026.
 
 > Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.
@@ -183,7 +188,7 @@ hydroviz/
 - Bonafilia, D., et al. (2020). Sen1Floods11: A georeferenced dataset to train and test deep learning flood algorithms for Sentinel-1. *CVPR Workshops*.
 
 **Validation data:**
-- European Union, Copernicus Emergency Management Service data.
+- European Union, Copernicus Emergency Management Service data (EMSR927 activation — strictly check-only).
 
 ---
 

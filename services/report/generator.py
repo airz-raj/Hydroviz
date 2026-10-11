@@ -46,8 +46,8 @@ def render_report(job_id: str, event_date: str, facts: dict, lang="en") -> str:
             allowed_numbers.append(float(part))
         except ValueError:
             pass
-    # Allow known metadata and template constants (Sentinel-1, 10m, 15m HAND, 20 deg slope, WorldDEM-30, 2026, etc.)
-    allowed_numbers.extend([1.0, 2.0, 10.0, 15.0, 20.0, 30.0, 2026.0])
+    # Allow known metadata and template constants (Sentinel-1, 10m, 15m HAND, 20 deg slope, WorldDEM-30, copyright years 2010-2018, citation years 2020/2024, 2026, etc.)
+    allowed_numbers.extend([1.0, 2.0, 10.0, 15.0, 20.0, 30.0, 2010.0, 2014.0, 2018.0, 2020.0, 2024.0, 2026.0])
     
     is_valid, bad_num = validate_numbers(html, allowed_numbers)
     if not is_valid:

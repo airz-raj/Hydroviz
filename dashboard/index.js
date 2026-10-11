@@ -844,5 +844,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // 10. Legal Attribution & Responsibility Modal Handlers
+    const attributionModal = document.getElementById('attribution-modal');
+    const attributionInfoBtn = document.getElementById('attribution-info-btn');
+    const attributionModalCloseBtn = document.getElementById('attribution-modal-close-btn');
+    const attributionModalOkBtn = document.getElementById('attribution-modal-ok-btn');
+
+    if (attributionInfoBtn && attributionModal) {
+        attributionInfoBtn.addEventListener('click', () => {
+            attributionModal.style.display = 'flex';
+        });
+    }
+
+    if (attributionModalCloseBtn && attributionModal) {
+        attributionModalCloseBtn.addEventListener('click', () => {
+            attributionModal.style.display = 'none';
+        });
+    }
+
+    if (attributionModalOkBtn && attributionModal) {
+        attributionModalOkBtn.addEventListener('click', () => {
+            attributionModal.style.display = 'none';
+        });
+    }
+
+    if (attributionModal) {
+        attributionModal.addEventListener('click', (e) => {
+            if (e.target === attributionModal) {
+                attributionModal.style.display = 'none';
+            }
+        });
+    }
+
     console.log("HydroViz Dashboard initialized successfully!");
 });
