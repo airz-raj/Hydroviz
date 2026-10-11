@@ -2,6 +2,14 @@
 
 All notable changes to the HydroViz project will be documented in this file.
 
+## [2026-10-11]
+
+- **test(live-pipeline):** Verified complete end-to-end integration across all milestones M0-M8:
+  - Validated live ONNX INT8 model loading and contour vectorization.
+  - Validated D8 flow tracer, EMSR927 case study endpoint, and dual strict/conservative cutoff scenarios.
+  - Added full live integration test `tests/integration/test_gateway_live_pipeline.py` with 100% test pass rate across 27 tests.
+  - Fixed English sitrep template heading alignment and secured on-disk hash cache persistence in gateway.
+
 ## [2026-10-10]
 
 - **feat(track-b):** Deep alignment with Hackathon Track B requirements and educational prototype guidelines:

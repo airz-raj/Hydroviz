@@ -126,6 +126,17 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         os.makedirs(job_dir, exist_ok=True)
         facts_file = os.path.join(job_dir, "facts.json")
         
+        # Register request hash
+        request_hash = _generate_job_hash(request)
+        _hash_to_job[request_hash] = job_id
+        hash_dir = os.path.join(data_dir, "cache", "hashes")
+        os.makedirs(hash_dir, exist_ok=True)
+        try:
+            with open(os.path.join(hash_dir, f"{request_hash}.txt"), "w") as hf:
+                hf.write(job_id)
+        except Exception:
+            pass
+        
         # Initialize facts.json
         mid_lat = (min_lat + max_lat) / 2.0
         lat_km = abs(max_lat - min_lat) * 111.0
@@ -157,6 +168,19 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
             json.dump(facts, f, indent=2)
 
         # 1. Ingest stage
+        if job_id not in _jobs:
+            now = _now_iso()
+            _jobs[job_id] = {
+                "job_id": job_id,
+                "status": "queued",
+                "stage": "queued",
+                "progress": 0.0,
+                "stages": {},
+                "partial_results": {},
+                "error": None,
+                "created_at": now,
+                "updated_at": now
+            }
         _jobs[job_id]["status"] = "ingesting"
         _jobs[job_id]["stage"] = "satellite_ingest"
         _jobs[job_id]["progress"] = 0.2
@@ -212,6 +236,8 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         _jobs[job_id]["updated_at"] = _now_iso()
         
     except Exception as e:
+        if job_id not in _jobs:
+            _jobs[job_id] = {"job_id": job_id}
         _jobs[job_id]["status"] = "failed"
         import traceback
         _jobs[job_id]["error"] = {"message": str(e), "trace": traceback.format_exc()}
@@ -230,16 +256,29 @@ def create_job(request: JobRequest, background_tasks: BackgroundTasks):
     request_hash = _generate_job_hash(request)
     now = _now_iso()
     
-    # Check in-memory hash cache
+    # Check in-memory or on-disk hash cache
+    data_dir = _get_data_dir()
     cached_job_id = _hash_to_job.get(request_hash)
-    if cached_job_id and cached_job_id in _jobs and _jobs[cached_job_id]["status"] == "complete":
-        return {
-            "job_id": cached_job_id,
-            "status": "complete",
-            "stage": "complete",
-            "progress": 1.0,
-            "message": "Returned from cache (Optimization 1)"
-        }
+    if not cached_job_id:
+        hash_file = os.path.join(data_dir, "cache", "hashes", f"{request_hash}.txt")
+        if os.path.exists(hash_file):
+            try:
+                with open(hash_file, "r") as hf:
+                    cached_job_id = hf.read().strip()
+                    _hash_to_job[request_hash] = cached_job_id
+            except Exception:
+                pass
+
+    if cached_job_id:
+        facts_file = os.path.join(data_dir, "jobs", cached_job_id, "facts.json")
+        if os.path.exists(facts_file) or (cached_job_id in _jobs and _jobs[cached_job_id].get("status") == "complete"):
+            return {
+                "job_id": cached_job_id,
+                "status": "complete",
+                "stage": "complete",
+                "progress": 1.0,
+                "message": "Returned from cache (Optimization 1)"
+            }
         
     job_id = request.job_id or str(uuid.uuid4())
     _hash_to_job[request_hash] = job_id
