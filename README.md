@@ -166,9 +166,6 @@ hydroviz/
 
 ## Required Attribution & Humanitarian Responsibility
 
-### A note on responsibility:
-> This disaster is recent, and many families are still affected. Treat the topic with respect: do not use images of victims in demos or reports. Systems built here are educational prototypes, not operational tools.
-
 ### Mandatory Submission Attribution:
 > Contains modified Copernicus Sentinel data 2026.
 
