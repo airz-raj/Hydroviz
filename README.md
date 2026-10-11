@@ -44,16 +44,49 @@ docker compose up --build
 # API docs:  http://localhost:8000/docs
 ```
 
-### Run a Job
+### Run Analysis via API
 
 ```bash
+# 1. Submit an AOI Scan (Accepts [Lon, Lat] or [Lat, Lon] automatically)
 curl -X POST http://localhost:8000/jobs \
   -H "Content-Type: application/json" \
   -d '{
-    "bbox": [85.0, 27.5, 86.5, 28.5],
+    "bbox": [85.20, 27.50, 85.90, 28.15],
     "event_date": "2026-08-26",
-    "osm_snapshot": "2026-07-27"
+    "osm_snapshot": "2026-07-27",
+    "options": {
+      "hand_threshold_m": 15.0,
+      "steep_slope_deg": 20.0
+    }
   }'
+
+# 2. Check Job Status
+curl http://localhost:8000/jobs/{job_id}/status
+
+# 3. Retrieve Computed Facts & Metrics
+curl http://localhost:8000/jobs/{job_id}/facts
+
+# 4. Interactive Downhill D8 Flow Path Tracing (Bonus)
+curl -X POST http://localhost:8000/trace \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bbox": [85.20, 27.50, 85.90, 28.15],
+    "origin": [85.55, 27.85]
+  }'
+
+# 5. Access Check-Only Copernicus EMSR927 Benchmark Metrics
+curl http://localhost:8000/case-study/emsr927
+
+# 6. View Humanitarian Situation Briefings
+# English: http://localhost:8000/jobs/{job_id}/report/en
+# Nepali:  http://localhost:8000/jobs/{job_id}/report/ne
+```
+
+### Running Tests
+
+```bash
+# Run full unit and live pipeline integration suite
+pytest -v
 ```
 
 ---

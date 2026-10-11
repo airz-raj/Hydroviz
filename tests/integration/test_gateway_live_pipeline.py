@@ -134,3 +134,4 @@ async def test_gateway_live_pipeline_full(tmp_path):
     cached_resp = res_cached_job.json()
     assert cached_resp["status"] == "complete"
     assert "cache" in cached_resp["message"].lower()
+

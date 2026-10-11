@@ -756,7 +756,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     modalDownloadBtn.addEventListener('click', () => {
-        reportModal.style.display = 'none';
+        if (!currentJobId) return;
+        const link = document.createElement('a');
+        link.href = `/jobs/${currentJobId}/report/${currentReportLang}`;
+        link.download = `hydroviz_sitrep_${currentJobId}_${currentReportLang}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     });
 
     if (modalPrintBtn) {

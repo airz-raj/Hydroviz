@@ -4,6 +4,12 @@ All notable changes to the HydroViz project will be documented in this file.
 
 ## [2026-10-11]
 
+- **docs(report-polishing):** Completed exhaustive 6-page technical report and fine-tuned deliverables:
+  - Authored comprehensive, publication-grade 6-page validation report in `docs/report.md` covering methodology, mathematical formulations, sensor physics, EMSR927 case study, and limitations.
+  - Harmonized `validation/validation_summary.md` metrics with the official `/case-study/emsr927` benchmark endpoint.
+  - Enhanced dashboard modal download handler to trigger direct file downloads for English and Nepali situation reports.
+  - Added `@media print` rules to bilingual sitrep templates for clean borderless PDF/printer output.
+  - Expanded `README.md` with full REST API curl examples, dynamic threshold configurations, and test instructions.
 - **test(live-pipeline):** Verified complete end-to-end integration across all milestones M0-M8:
   - Validated live ONNX INT8 model loading and contour vectorization.
   - Validated D8 flow tracer, EMSR927 case study endpoint, and dual strict/conservative cutoff scenarios.
