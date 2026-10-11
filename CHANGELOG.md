@@ -9,6 +9,7 @@ All notable changes to the HydroViz project will be documented in this file.
   - Added dedicated *Legal & Responsibility* interactive modal and updated floating attribution pill in `dashboard/index.html` and `dashboard/index.js`.
   - Added verbatim humanitarian responsibility notice (*"This disaster is recent, and many families are still affected. Treat the topic with respect: do not use images of victims in demos or reports. Systems built here are educational prototypes, not operational tools."*) across `README.md`, `docs/report.md`, `docs/demo_script.md`, bilingual sitrep templates, and UI modals.
   - Whitelisted attribution copyright/dataset years (2010, 2014, 2018, 2020, 2024, 2026) in `services/report/generator.py` for automated Devanagari Number Guard compliance.
+  - Added open-source `LICENSE` (MIT License) and updated `README.md` License section with full upstream dataset licensing breakdowns (Copernicus free/open, ODbL, CC BY 4.0, MIT).
 - **docs(report-polishing):** Completed exhaustive 6-page technical report and fine-tuned deliverables:
   - Authored comprehensive, publication-grade 6-page validation report in `docs/report.md` covering methodology, mathematical formulations, sensor physics, EMSR927 case study, and limitations.
   - Harmonized `validation/validation_summary.md` metrics with the official `/case-study/emsr927` benchmark endpoint.

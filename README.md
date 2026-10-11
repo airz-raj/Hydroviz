@@ -192,6 +192,16 @@ hydroviz/
 
 ---
 
-## Licence
+## License
 
-[TBD — confirm with team]
+This software is licensed under the open-source **[MIT License](LICENSE)**.
+
+### Upstream & Dataset Licenses
+In accordance with the Track B guidelines:
+- **HydroViz Codebase:** [MIT License](LICENSE)
+- **Sentinel-1 & Sentinel-2 Satellite Data:** [Copernicus Free, Full, and Open Data Policy](https://dataspace.copernicus.eu/) (any use allowed).
+- **Copernicus WorldDEM-30:** © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the EU and ESA; all rights reserved.
+- **OpenStreetMap Data:** [Open Database License (ODbL 1.0)](https://opendatacommons.org/licenses/odbl/) — any published derivative OSM data remains under ODbL.
+- **Kuro Siwo Pre-trained Weights:** [MIT License](https://github.com/Orion-AI-Lab/KuroSiwo) (NeurIPS 2024 / CC BY). Free use with credit; cite Bountos et al., 2024.
+- **Sen1Floods11 Pre-trained Weights:** [CC BY 4.0](https://github.com/cloudtostreet/Sen1Floods11) for non-commercial educational use; cite Bonafilia et al., 2020.
+- **Copernicus EMS (EMSR927):** Check-only validation data provided free with attribution.
