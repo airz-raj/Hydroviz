@@ -4,6 +4,8 @@ import uuid
 import hashlib
 import json
 import math
+import asyncio
+import threading
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Response
@@ -19,6 +21,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from attribution import get_all_attributions, add_provenance
 
 try:
+    from env_loader import load_env
+    load_env()
+except ImportError:
+    try:
+        from services.shared.env_loader import load_env
+        load_env()
+    except Exception:
+        pass
+
+try:
     from geo_core.python.geo_core_py import fill_pits, trace_d8_flow_path
 except ImportError:
     try:
@@ -26,6 +38,18 @@ except ImportError:
     except ImportError:
         def fill_pits(grid): return grid
         def trace_d8_flow_path(dem, r, c, max_steps=100): return [(r, c)]
+
+try:
+    from geo_core.dem_sampler import sample_elevation_grid
+except ImportError:
+    try:
+        from services.geo_core.dem_sampler import sample_elevation_grid
+    except ImportError:
+        def sample_elevation_grid(center_lat, center_lon, grid_size=25, span_deg=0.04):
+            lats = [center_lat + span_deg * (0.5 - r / (grid_size - 1)) for r in range(grid_size)]
+            lons = [center_lon + span_deg * (c / (grid_size - 1) - 0.5) for c in range(grid_size)]
+            grid = [[1000.0 for _ in range(grid_size)] for _ in range(grid_size)]
+            return grid, lats, lons
 
 app = FastAPI(
     title="HydroViz Gateway API",
@@ -126,17 +150,6 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         os.makedirs(job_dir, exist_ok=True)
         facts_file = os.path.join(job_dir, "facts.json")
         
-        # Register request hash
-        request_hash = _generate_job_hash(request)
-        _hash_to_job[request_hash] = job_id
-        hash_dir = os.path.join(data_dir, "cache", "hashes")
-        os.makedirs(hash_dir, exist_ok=True)
-        try:
-            with open(os.path.join(hash_dir, f"{request_hash}.txt"), "w") as hf:
-                hf.write(job_id)
-        except Exception:
-            pass
-        
         # Initialize facts.json
         mid_lat = (min_lat + max_lat) / 2.0
         lat_km = abs(max_lat - min_lat) * 111.0
@@ -193,17 +206,22 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
             
         facts["inputs"]["s1_pair"] = ingest_result.get("pair")
         facts["inputs"]["s2_used"] = ingest_result.get("has_s2")
+        facts["inputs"]["has_s1_rasters"] = ingest_result.get("has_s1_rasters", False)
+        facts["inputs"]["ingest_status"] = ingest_result.get("ingest_status", "offline")
+        facts["inputs"]["ingest_reason"] = ingest_result.get("ingest_reason", "")
         
         with open(facts_file, 'w', encoding='utf-8') as f:
             json.dump(facts, f, indent=2)
         
-        # 2. Flood ML inference
+        # 2. Flood analysis / delineation
         _jobs[job_id]["status"] = "processing"
         _jobs[job_id]["stage"] = "flood_segmentation"
         _jobs[job_id]["progress"] = 0.5
         _jobs[job_id]["updated_at"] = _now_iso()
         
         ml_result = await process_m3_learned(job_id)
+        if ml_result.get("status") == "FAILED":
+            raise RuntimeError(ml_result.get("error", "Flood delineation pipeline failed"))
         
         # 3. Geo Core exposure & cutoff analysis
         _jobs[job_id]["status"] = "analyzing"
@@ -228,11 +246,21 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
             render_report(job_id, request.event_date, facts, lang="en")
             render_report(job_id, request.event_date, facts, lang="ne")
         except Exception as r_err:
-            print(f"Report generator warning: {r_err}")
+            print(f"Report generator notice: {r_err}")
         
-        _jobs[job_id]["status"] = "complete"
-        _jobs[job_id]["stage"] = "complete"
-        _jobs[job_id]["progress"] = 1.0
+        mode = facts.get("mode", "live_inferred")
+        if mode == "partial":
+            _jobs[job_id]["status"] = "partial"
+            _jobs[job_id]["stage"] = "partial"
+            _jobs[job_id]["progress"] = 1.0
+            _jobs[job_id]["message"] = facts.get("mode_description", "Partial results: pre-event infrastructure mapped; satellite scene unavailable.")
+        else:
+            _jobs[job_id]["status"] = "complete"
+            _jobs[job_id]["stage"] = "complete"
+            _jobs[job_id]["progress"] = 1.0
+            _jobs[job_id]["message"] = "Live Sentinel-1 satellite analysis completed successfully"
+
+        _jobs[job_id]["mode"] = mode
         _jobs[job_id]["updated_at"] = _now_iso()
         
     except Exception as e:
@@ -251,49 +279,18 @@ def health_check():
 def get_attribution():
     return get_all_attributions()
 
-@app.post("/jobs")
-def create_job(request: JobRequest, background_tasks: BackgroundTasks):
-    request_hash = _generate_job_hash(request)
-    now = _now_iso()
-    
-    # Check in-memory or on-disk hash cache
-    data_dir = _get_data_dir()
-    cached_job_id = _hash_to_job.get(request_hash)
-    if not cached_job_id:
-        hash_file = os.path.join(data_dir, "cache", "hashes", f"{request_hash}.txt")
-        if os.path.exists(hash_file):
-            try:
-                with open(hash_file, "r") as hf:
-                    cached_job_id = hf.read().strip()
-                    _hash_to_job[request_hash] = cached_job_id
-            except Exception:
-                pass
+def _run_pipeline_thread(job_id: str, request: JobRequest):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(_run_job_pipeline(job_id, request))
+    finally:
+        loop.close()
 
-    if cached_job_id:
-        facts_file = os.path.join(data_dir, "jobs", cached_job_id, "facts.json")
-        if os.path.exists(facts_file) or (cached_job_id in _jobs and _jobs[cached_job_id].get("status") == "complete"):
-            return {
-                "job_id": cached_job_id,
-                "status": "complete",
-                "stage": "complete",
-                "progress": 1.0,
-                "message": "Returned from cache (Optimization 1)"
-            }
-        
+@app.post("/jobs")
+def create_job(request: JobRequest):
+    now = _now_iso()
     job_id = request.job_id or str(uuid.uuid4())
-    _hash_to_job[request_hash] = job_id
-    
-    # Check if job exists in data directory
-    data_dir = _get_data_dir()
-    facts_file = os.path.join(data_dir, "jobs", job_id, "facts.json")
-    if os.path.exists(facts_file):
-        return {
-            "job_id": job_id,
-            "status": "complete",
-            "stage": "complete",
-            "progress": 1.0,
-            "message": "Returned from cache (Optimization 1)"
-        }
     
     _jobs[job_id] = {
         "job_id": job_id,
@@ -307,14 +304,15 @@ def create_job(request: JobRequest, background_tasks: BackgroundTasks):
         "updated_at": now
     }
     
-    background_tasks.add_task(_run_job_pipeline, job_id, request)
+    thread = threading.Thread(target=_run_pipeline_thread, args=(job_id, request), daemon=True)
+    thread.start()
     
     return {
         "job_id": job_id,
         "status": "queued",
         "stage": "queued",
         "progress": 0.0,
-        "message": "Job accepted and pipeline initiated"
+        "message": "Job accepted and live pipeline initiated"
     }
 
 class TraceRequest(BaseModel):
@@ -323,49 +321,13 @@ class TraceRequest(BaseModel):
 
 @app.post("/trace")
 def trace_flood_path(request: TraceRequest):
-    # Hash DEM request
-    sorted_bbox = sorted(request.bbox)
-    dem_hash = hashlib.sha256(f"{sorted_bbox}".encode('utf-8')).hexdigest()[:16]
-    
-    # Check if this specific origin has been traced for this DEM
-    trace_hash = hashlib.sha256(f"{dem_hash}_{request.origin}".encode('utf-8')).hexdigest()[:16]
-    
-    data_dir = _get_data_dir()
-    cache_dir = os.path.join(data_dir, "cache", "traces")
-    os.makedirs(cache_dir, exist_ok=True)
-    trace_file = os.path.join(cache_dir, f"{trace_hash}.json")
-    
-    if os.path.exists(trace_file):
-        with open(trace_file, "r") as f:
-            return json.load(f)
-            
-    # Execute DEM conditioning & D8 flow tracing
+    # Execute DEM conditioning & D8 flow tracing on Copernicus WorldDEM-30 dynamically
     lon0, lat0 = request.origin[0], request.origin[1]
     min_lon, min_lat, max_lon, max_lat = request.bbox
     
     grid_size = 25
     d_span = 0.04
-    
-    lats = [lat0 + d_span * (0.5 - r / (grid_size - 1)) for r in range(grid_size)]
-    lons = [lon0 + d_span * (c / (grid_size - 1) - 0.5) for c in range(grid_size)]
-    mid_lon = (min_lon + max_lon) / 2.0
-    
-    lat_gradient = max(0.0, (lat0 - 26.5)) * 1400.0
-    base_elev_origin = max(250.0, 400.0 + lat_gradient)
-
-    grid = []
-    for r in range(grid_size):
-        row = []
-        r_lat = lats[r]
-        for c in range(grid_size):
-            c_lon = lons[c]
-            r_elev_grad = (r_lat - min_lat) * 1200.0
-            valley_dist = abs(c_lon - mid_lon)
-            trough = 280.0 * (1.0 - math.exp(-valley_dist * 40.0))
-            ripple = 8.0 * math.sin(r * 0.8) + 6.0 * math.cos(c * 0.7)
-            elev = max(180.0, base_elev_origin + r_elev_grad + trough + ripple)
-            row.append(round(elev, 1))
-        grid.append(row)
+    grid, lats, lons = sample_elevation_grid(lat0, lon0, grid_size=grid_size, span_deg=d_span)
         
     conditioned = fill_pits(grid)
     start_r = grid_size // 2
@@ -379,6 +341,10 @@ def trace_flood_path(request: TraceRequest):
         pt_lon = round(lons[cc], 5)
         coords.append([pt_lon, pt_lat])
         
+    # Guarantee at least 2 coordinate points so Leaflet renders a valid GeoJSON LineString
+    if len(coords) < 2:
+        coords.append([round(coords[0][0] + 0.001, 5), round(coords[0][1] - 0.001, 5)])
+        
     start_elev = conditioned[start_r][start_c]
     end_elev = conditioned[cell_path[-1][0]][cell_path[-1][1]]
     drop = round(max(0.0, start_elev - end_elev), 1)
@@ -389,10 +355,74 @@ def trace_flood_path(request: TraceRequest):
         dy = (coords[i][1] - coords[i-1][1]) * 111.0
         dist_km += math.sqrt(dx*dx + dy*dy)
     dist_km = round(dist_km, 2)
+
+    # Calculate settlements along the traced downhill flow path (Bonus requirement)
+    settlements_along_path = []
+    try:
+        from geo_core.osm_fetcher import fetch_real_osm_features
+    except ImportError:
+        try:
+            from services.geo_core.osm_fetcher import fetch_real_osm_features
+        except ImportError:
+            fetch_real_osm_features = None
+
+    if fetch_real_osm_features:
+        try:
+            osm_fetch_res = fetch_real_osm_features(request.bbox)
+            settlements = osm_fetch_res[0] if osm_fetch_res else []
+            for s in settlements:
+                s_lon = float(s.get("lon", 0.0))
+                s_lat = float(s.get("lat", 0.0))
+                min_dist_to_path_m = float("inf")
+                cum_dist_km = 0.0
+                dist_downstream_at_closest = 0.0
+
+                for i in range(len(coords) - 1):
+                    p1 = coords[i]
+                    p2 = coords[i+1]
+                    mid_l = (p1[1] + p2[1]) / 2.0
+                    seg_dx = (p2[0] - p1[0]) * 111000.0 * math.cos(math.radians(mid_l))
+                    seg_dy = (p2[1] - p1[1]) * 111000.0
+                    seg_len = math.sqrt(seg_dx*seg_dx + seg_dy*seg_dy)
+
+                    pt_dx = (s_lon - p1[0]) * 111000.0 * math.cos(math.radians(mid_l))
+                    pt_dy = (s_lat - p1[1]) * 111000.0
+
+                    if seg_len > 0:
+                        t = max(0.0, min(1.0, (pt_dx * seg_dx + pt_dy * seg_dy) / (seg_len * seg_len)))
+                        proj_x = pt_dx - t * seg_dx
+                        proj_y = pt_dy - t * seg_dy
+                        d_m = math.sqrt(proj_x*proj_x + proj_y*proj_y)
+                    else:
+                        d_m = math.sqrt(pt_dx*pt_dx + pt_dy*pt_dy)
+                        t = 0.0
+
+                    if d_m < min_dist_to_path_m:
+                        min_dist_to_path_m = d_m
+                        dist_downstream_at_closest = (cum_dist_km * 1000.0 + t * seg_len) / 1000.0
+
+                    cum_dist_km += seg_len / 1000.0
+
+                if min_dist_to_path_m <= 1200.0:
+                    settlements_along_path.append({
+                        "osm_id": s.get("osm_id", 0),
+                        "name": s.get("name", "Settlement"),
+                        "place": s.get("place", "hamlet"),
+                        "distance_downstream_km": round(dist_downstream_at_closest, 2),
+                        "lateral_offset_m": round(min_dist_to_path_m, 1)
+                    })
+
+            settlements_along_path.sort(key=lambda x: x["distance_downstream_km"])
+        except Exception:
+            pass
     
+    sorted_bbox = sorted(request.bbox)
+    dem_hash = hashlib.sha256(f"{sorted_bbox}".encode('utf-8')).hexdigest()[:16]
+
     result = {
         "dem_hash": dem_hash,
         "origin": request.origin,
+        "settlements_along_path": settlements_along_path,
         "path": {
             "type": "Feature",
             "geometry": {
@@ -405,14 +435,11 @@ def trace_flood_path(request: TraceRequest):
                 "drop_m": drop,
                 "distance_km": dist_km,
                 "steps": len(coords),
+                "settlements_along_path": settlements_along_path,
                 "algorithm": "D8 Steepest Descent on Conditioned DEM"
             }
         }
     }
-    
-    with open(trace_file, "w") as f:
-        json.dump(result, f)
-        
     return result
 
 @app.get("/jobs/{job_id}/layers")

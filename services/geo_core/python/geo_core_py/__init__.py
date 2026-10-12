@@ -196,6 +196,8 @@ def trace_d8_flow_path(dem: List[List[float]], start_r: int, start_c: int, max_s
     """
     Traces downstream flow path on a 2D DEM grid using the D8 algorithm.
     At each step, moves to the neighbor with steepest descent.
+    Includes flat-channel momentum routing and depression breaching so
+    downstream paths never stall prematurely on river flats.
     """
     rows = len(dem)
     cols = len(dem[0])
@@ -214,15 +216,44 @@ def trace_d8_flow_path(dem: List[List[float]], start_r: int, start_c: int, max_s
         best_slope = 0.0
         best_next = None
 
+        # 1. Primary: strictly downhill neighbor (steepest descent)
         for dr, dc, dist in directions:
             nr, nc = curr_r + dr, curr_c + dc
-            if 0 <= nr < rows and 0 <= nc < cols:
+            if 0 <= nr < rows and 0 <= nc < cols and (nr, nc) not in visited:
                 drop = curr_elev - dem[nr][nc]
-                if drop > 0:
+                if drop > 1e-4:
                     slope = drop / dist
                     if slope > best_slope:
                         best_slope = slope
                         best_next = (nr, nc)
+
+        # 2. Secondary: equal elevation neighbors (flat alluvial river routing)
+        if best_next is None:
+            equal_neighbors = []
+            for dr, dc, dist in directions:
+                nr, nc = curr_r + dr, curr_c + dc
+                if 0 <= nr < rows and 0 <= nc < cols and (nr, nc) not in visited:
+                    if abs(dem[nr][nc] - curr_elev) < 0.25:
+                        equal_neighbors.append((nr, nc))
+            if equal_neighbors:
+                if len(path) >= 2:
+                    last_dr = path[-1][0] - path[-2][0]
+                    last_dc = path[-1][1] - path[-2][1]
+                    equal_neighbors.sort(key=lambda p: -((p[0] - curr_r) * last_dr + (p[1] - curr_c) * last_dc))
+                best_next = equal_neighbors[0]
+
+        # 3. Tertiary: mild pit breach (lowest unvisited neighbor within 1m threshold)
+        if best_next is None:
+            lowest_elev = float('inf')
+            lowest_nb = None
+            for dr, dc, dist in directions:
+                nr, nc = curr_r + dr, curr_c + dc
+                if 0 <= nr < rows and 0 <= nc < cols and (nr, nc) not in visited:
+                    if dem[nr][nc] < lowest_elev:
+                        lowest_elev = dem[nr][nc]
+                        lowest_nb = (nr, nc)
+            if lowest_nb is not None and lowest_elev <= curr_elev + 1.5:
+                best_next = lowest_nb
 
         if best_next is None or best_next in visited:
             break

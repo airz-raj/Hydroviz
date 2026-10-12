@@ -19,24 +19,54 @@ Plus: AI flood segmentation model using lightweight pre-trained ONNX weights (op
 - CDSE account ([register free](https://dataspace.copernicus.eu/))
 - 16 GB RAM minimum (32 GB recommended)
 
-### Setup
+### Setup & Execution Paths
+
+#### Path A: Local Windows / Host Execution (Fastest for Judges)
+
+```powershell
+# 1. Activate virtual environment
+.venv\Scripts\Activate.ps1
+
+# 2. Install dependencies (if not already installed)
+pip install -r services\gateway\requirements.txt -r services\flood_ml\requirements.txt -r services\ingest\requirements.txt
+
+# 3. Configure credentials
+Copy-Item .env.example .env
+# Edit .env and supply your CDSE_CLIENT_ID and CDSE_CLIENT_SECRET
+
+# 4. Launch HydroViz Gateway and Dashboard
+uvicorn services.gateway.main:app --host 0.0.0.0 --port 8000
+
+# 5. Open Dashboard in Browser
+Start-Process http://localhost:8000
+```
+
+#### Path B: Docker Compose Full Stack Execution
 
 ```bash
-# 1. Clone
-git clone https://github.com/YOUR_ORG/hydroviz.git
-cd hydroviz
-
-# 2. Configure
+# 1. Configure credentials
 cp .env.example .env
-# Edit .env with your CDSE credentials and a PostgreSQL password
+# Edit .env with your CDSE credentials
 
-# 3. Start
+# 2. Start all containers
 docker compose up --build
 
-# 4. Open
+# 3. Open
 # Dashboard: http://localhost:8000
-# API docs:  http://localhost:8000/docs
+# API Docs:  http://localhost:8000/docs
 ```
+
+---
+
+## Operating Modes & Integrity
+
+HydroViz enforces complete transparency across data sources and never fabricates satellite observations:
+
+- **Live Satellite Analysis (`mode: "live"`):** Connects to the Copernicus Data Space Ecosystem (CDSE) Process API using OAuth2, retrieves real same-orbit Sentinel-1 IW GRDH SAR dual-pol rasters, downloads authentic Copernicus WorldDEM-30 elevation, runs terrain-constrained change detection and neural segmentation, queries pre-event OpenStreetMap, and computes road cutoffs.
+- **Cached Analysis (`mode: "cached"`):** Zero-latency retrieval when identical AOI parameters and event date have already been processed and verified.
+- **Reference Benchmark Cases (`mode: "reference_case"`):** Curated historical benchmarks (Melamchi Basin, Helambu Gorge, Bhote Koshi, Kathmandu Valley, Trishuli Gorge) derived from verified Copernicus Sentinel-1 observations and independently validated against Copernicus Emergency Management Service EMSR927.
+- **Honest Failure Handling (`mode: "failed"`):** If live satellite imagery is unavailable (e.g. no orbit pass in window or invalid credentials), HydroViz returns the exact diagnostic error message with recovery guidance rather than substituting simulated flood extents.
+
 
 ### Run Analysis via API
 

@@ -140,63 +140,20 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
         if coords and len(coords[0]) >= 3:
             debris_polys.append(coords[0])
 
-    # 2. Query real OpenStreetMap settlements, road networks, and bridges
-    osm_settlements, osm_roads, osm_bridges = [], [], []
+    # 2. Query real OpenStreetMap settlements, road networks, bridges, and buildings
+    osm_settlements, osm_roads, osm_bridges, osm_buildings = [], [], [], []
     try:
         osm_fetch_res = fetch_real_osm_features(bbox, timeout_sec=6.0)
-        if len(osm_fetch_res) == 3:
+        if len(osm_fetch_res) == 4:
+            osm_settlements, osm_roads, osm_bridges, osm_buildings = osm_fetch_res
+        elif len(osm_fetch_res) == 3:
             osm_settlements, osm_roads, osm_bridges = osm_fetch_res
         elif len(osm_fetch_res) == 2:
             osm_settlements, osm_roads = osm_fetch_res
     except Exception as e:
-        print(f"Notice: OSM live query fell back to local spatial network ({e})")
+        print(f"Notice: OSM live query fell back to local cache/baseline ({e})")
 
-    # Regional valley arterial highways crossing the AOI river corridor
-    regional_arterials = [
-        {
-            "osm_id": 9001,
-            "name": "Helambu Regional Valley Highway",
-            "highway": "primary",
-            "coordinates": [
-                [round(min_lon + d_lon * 0.15, 5), round(mid_lat - d_lat * 0.08, 5)],
-                [round(mid_lon - d_lon * 0.04, 5), round(mid_lat, 5)],
-                [round(mid_lon + d_lon * 0.06, 5), round(mid_lat + d_lat * 0.04, 5)],
-                [round(max_lon - d_lon * 0.15, 5), round(mid_lat + d_lat * 0.12, 5)]
-            ]
-        },
-        {
-            "osm_id": 9002,
-            "name": "Melamchi River Crossing Arterial",
-            "highway": "secondary",
-            "coordinates": [
-                [round(min_lon + d_lon * 0.25, 5), round(min_lat + d_lat * 0.28, 5)],
-                [round(mid_lon, 5), round(min_lat + d_lat * 0.35, 5)],
-                [round(max_lon - d_lon * 0.2, 5), round(min_lat + d_lat * 0.42, 5)]
-            ]
-        }
-    ]
-    osm_roads = regional_arterials + osm_roads
-
-    # Valley settlements distributed across both banks of the river
-    valley_settlements = [
-        {
-            "osm_id": 8001,
-            "name": "Melamchi Riverside Ward",
-            "lat": round(mid_lat + d_lat * 0.04, 5),
-            "lon": round(mid_lon + d_lon * 0.06, 5),
-            "place": "village"
-        },
-        {
-            "osm_id": 8002,
-            "name": "Upper Helambu Highland Hamlet",
-            "lat": round(mid_lat + d_lat * 0.22, 5),
-            "lon": round(mid_lon + d_lon * 0.14, 5),
-            "place": "hamlet"
-        }
-    ]
-    osm_settlements = valley_settlements + osm_settlements
-
-    # 3. Spatial Intersection Analysis on Roads (Strict vs Conservative)
+    # 3. Spatial Intersection Analysis on Genuine Roads (Strict vs Conservative)
     road_features = []
     graph_edges = []
     flooded_edge_ids_strict = set()
@@ -283,7 +240,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
             }
         })
 
-    total_roads_km = round(max(total_roads_km, 8.5), 1)
+    total_roads_km = round(total_roads_km, 1)
     exposed_roads_km = round(exposed_roads_strict_km, 1)
     exposed_roads_cons_km = round(exposed_roads_cons_km, 1)
     roads_exposed_length_m = round(exposed_roads_km * 1000.0, 1)
@@ -310,59 +267,93 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
                     "status": "likely_damaged",
                     "confidence": round(0.85 + (b_idx % 10) * 0.01, 2)
                 })
-    if not bridge_records:
-        # Crossings of severed roads represent inferred bridge/culvert locations
-        computed_bridges = max(0, min(5, int(round(exposed_roads_km / 1.5))))
-        bridges_damaged = computed_bridges
-        bridge_records = [
-            {
-                "osm_id": 11001 + b_idx,
-                "name": f"River Crossing Culvert {b_idx + 1}",
-                "status": "likely_damaged",
-                "confidence": round(0.84 + (b_idx * 0.03) % 0.12, 2)
-            }
-            for b_idx in range(bridges_damaged)
-        ]
-
     # 4. Connect settlements and run Dijkstra Network Cut-Off Analysis
+    # Determine destinations: real towns, hospitals, or regional arterial exit nodes
+    destination_node_ids = []
+    for s in osm_settlements:
+        if s.get("place") in ("town", "city") or "hospital" in s.get("name", "").lower():
+            dest_id = f"dest_{s['osm_id']}"
+            destination_node_ids.append(dest_id)
+            graph_nodes.append(dest_id)
+            
+    if not destination_node_ids and osm_settlements:
+        d_id = f"dest_{osm_settlements[0]['osm_id']}"
+        destination_node_ids.append(d_id)
+        graph_nodes.append(d_id)
+        
+    if not destination_node_ids:
+        destination_node_ids.append("regional_terminus")
+        graph_nodes.append("regional_terminus")
+
+    # Connect destinations to road network
+    if osm_roads:
+        for d_node in destination_node_ids:
+            graph_edges.append({
+                "id": f"conn_dest_{d_node}",
+                "u": d_node,
+                "v": "junc_0_a",
+                "weight": 500.0
+            })
+
+    # Connect road endpoints in close proximity (< 400m) to form network topology
+    for i in range(min(len(osm_roads), 15)):
+        for j in range(i + 1, min(len(osm_roads), i + 5)):
+            pi_a = osm_roads[i]["coordinates"][0]
+            pi_b = osm_roads[i]["coordinates"][-1]
+            pj_a = osm_roads[j]["coordinates"][0]
+            pj_b = osm_roads[j]["coordinates"][-1]
+            for (pA, nA) in [(pi_a, f"junc_{i}_a"), (pi_b, f"junc_{i}_b")]:
+                for (pB, nB) in [(pj_a, f"junc_{j}_a"), (pj_b, f"junc_{j}_b")]:
+                    d_m = math.hypot((pA[0] - pB[0]) * 111000.0 * math.cos(math.radians(mid_lat)), (pA[1] - pB[1]) * 111000.0)
+                    if d_m < 600.0:
+                        graph_edges.append({
+                            "id": f"topo_link_{i}_{j}_{nA}_{nB}",
+                            "u": nA,
+                            "v": nB,
+                            "weight": max(20.0, d_m)
+                        })
+
     settlements_graph_input = []
-    for s_idx, s_data in enumerate(osm_settlements[:10]):
+    unconnected_settlements = set()
+
+    for s_idx, s_data in enumerate(osm_settlements[:15]):
         s_id = s_data["osm_id"]
         s_name = s_data["name"]
         s_node = f"settlement_node_{s_id}"
         graph_nodes.append(s_node)
 
-        # Connect settlement to road junction on its respective bank of the river
-        is_east_bank = s_data.get("lon", mid_lon) > mid_lon
-        nearest_junc = f"junc_{s_idx % min(len(osm_roads), 10)}_{'b' if is_east_bank else 'a'}"
-        graph_edges.append({
-            "id": f"access_edge_{s_id}",
-            "u": nearest_junc,
-            "v": s_node,
-            "weight": 800.0 + (s_idx * 250.0)
-        })
+        # Geometrically find closest road coordinate
+        min_dist_m = 999999.0
+        nearest_junc = None
+        for r_i, r_obj in enumerate(osm_roads[:20]):
+            for pt_idx, pt in enumerate([r_obj["coordinates"][0], r_obj["coordinates"][-1]]):
+                d_lat = (pt[1] - s_data["lat"]) * 111000.0
+                d_lon = (pt[0] - s_data["lon"]) * 111000.0 * math.cos(math.radians(s_data["lat"]))
+                d_m = math.hypot(d_lat, d_lon)
+                if d_m < min_dist_m:
+                    min_dist_m = d_m
+                    nearest_junc = f"junc_{r_i}_{'a' if pt_idx == 0 else 'b'}"
 
-        # Provide a highland detour route for one east-bank settlement
-        if s_idx == 0:
-            alt_junc = f"junc_1_b"
+        if nearest_junc and min_dist_m < 10000.0:
             graph_edges.append({
-                "id": f"alt_detour_edge_{s_id}",
-                "u": alt_junc,
+                "id": f"access_edge_{s_id}",
+                "u": nearest_junc,
                 "v": s_node,
-                "weight": 3800.0
+                "weight": max(100.0, min_dist_m)
             })
-
-        settlements_graph_input.append({
-            "osm_id": s_id,
-            "name": s_name,
-            "node_id": s_node
-        })
+            settlements_graph_input.append({
+                "osm_id": s_id,
+                "name": s_name,
+                "node_id": s_node
+            })
+        else:
+            unconnected_settlements.add(s_id)
 
     def run_scenario_classification(flooded_edges):
         if not classify_settlements or not settlements_graph_input:
             return {}
         results = classify_settlements(
-            graph_nodes, graph_edges, [hub_node_id],
+            graph_nodes, graph_edges, destination_node_ids,
             settlements_graph_input, flooded_edges,
             detour_threshold_factor=1.5
         )
@@ -374,25 +365,30 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
     settlement_list = []
     settlement_features = []
 
-    for s_idx, s_data in enumerate(osm_settlements[:10]):
+    for s_idx, s_data in enumerate(osm_settlements[:15]):
         s_id = s_data["osm_id"]
         s_name = s_data["name"]
         s_lat = s_data["lat"]
         s_lon = s_data["lon"]
         
-        d_res = strict_dijkstra.get(s_id, {})
-        status = d_res.get("status", "reachable")
-        detour_factor = d_res.get("detour_factor")
-        pop = 250 + ((s_idx * 170 + int(area_km2)) % 600)
-
-        if status == "isolated":
-            reason = "Primary road access submerged by floodwaters; zero alternate bypass available"
-        elif status == "detour":
-            reason = f"Primary road washed out; alternate highland detour required (Detour factor: {detour_factor:.1f}x)"
-        elif status == "unknown":
-            reason = "Missing pre-event road connectivity in OSM baseline (classified as unknown, not isolated)"
+        if s_id in unconnected_settlements:
+            status = "unknown"
+            detour_factor = None
+            reason = "No mapped pre-event road connectivity in OSM baseline (classified as unknown, not isolated)"
         else:
-            reason = "Road access link intact and passable"
+            d_res = strict_dijkstra.get(s_id, {})
+            status = d_res.get("status", "reachable")
+            detour_factor = d_res.get("detour_factor")
+            if status == "isolated":
+                reason = "Access road submerged by floodwaters; zero alternate bypass available to destination"
+            elif status == "detour":
+                reason = f"Primary road link severed; alternate mountain detour required (Detour factor: {detour_factor:.1f}x)"
+            elif status == "unknown":
+                reason = "Missing pre-event road connectivity in OSM baseline (classified as unknown, not isolated)"
+            else:
+                reason = "Road access link intact and passable"
+
+        pop = s_data.get("population") or (250 + ((s_idx * 170 + int(area_km2)) % 600))
 
         settlement_list.append({
             "osm_id": s_id,
@@ -415,93 +411,97 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
             }
         })
 
-    # 5. Exposed Buildings Spatial Distribution
+    # 5. Exposed Buildings Spatial Analysis (Genuine OSM Footprints Only)
     building_features = []
     exposed_high = 0
     exposed_medium = 0
 
-    candidate_locations = []
-    # Sample structure clusters along inundated river corridor perimeter
-    for p_idx, poly_pts in enumerate(flood_polys[:4]):
-        if len(poly_pts) >= 4:
-            # Bank vertices
-            for step in [0, len(poly_pts)//3, 2*len(poly_pts)//3]:
-                pt = poly_pts[step % len(poly_pts)]
-                candidate_locations.append((f"River Corridor Sector {p_idx+1}", pt[0], pt[1], 16))
-                candidate_locations.append((f"Valley Flank Cluster {p_idx+1}", pt[0] + 0.002, pt[1] - 0.002, 10))
+    if osm_buildings:
+        for b_idx, b in enumerate(osm_buildings):
+            bx = float(b["lon"])
+            by = float(b["lat"])
+            b_pt = (bx, by)
+            b_name = b.get("name") or f"Building #{b.get('osm_id', b_idx+1)}"
+            b_type = b.get("type", "building")
 
-    # Sample clusters along debris scour margins
-    for d_idx, poly_pts in enumerate(debris_polys[:3]):
-        if len(poly_pts) >= 3:
-            d_pt = poly_pts[0]
-            candidate_locations.append((f"Debris Scour Hamlet {d_idx+1}", d_pt[0], d_pt[1], 12))
+            # Point-in-polygon test against genuine flood extent
+            in_flood = False
+            for poly_pts in flood_polys:
+                if len(poly_pts) >= 3:
+                    cv_poly = np.array(poly_pts, dtype=np.float32)
+                    if cv2.pointPolygonTest(cv_poly, b_pt, False) >= 0:
+                        in_flood = True
+                        break
 
-    for s in settlement_list:
-        candidate_locations.append((s["name"], s["coordinates"][0], s["coordinates"][1], max(10, int(s.get("population", 300) * 0.08))))
+            in_debris = False
+            if not in_flood:
+                for poly_pts in debris_polys:
+                    if len(poly_pts) >= 3:
+                        cv_poly = np.array(poly_pts, dtype=np.float32)
+                        if cv2.pointPolygonTest(cv_poly, b_pt, False) >= 0:
+                            in_debris = True
+                            break
 
-    for b_idx, (b_name, bx, by, b_count) in enumerate(candidate_locations[:12]):
-        b_pt = (float(bx), float(by))
-        max_dist = -999.0
-        for poly_pts in flood_polys:
-            if len(poly_pts) >= 3:
-                cv_poly = np.array(poly_pts, dtype=np.float32)
-                d = cv2.pointPolygonTest(cv_poly, b_pt, True)
-                if d > max_dist:
-                    max_dist = d
+            near_flood = False
+            if not in_flood and not in_debris:
+                for poly_pts in flood_polys:
+                    if len(poly_pts) >= 3:
+                        cv_poly = np.array(poly_pts, dtype=np.float32)
+                        if cv2.pointPolygonTest(cv_poly, b_pt, True) >= -0.001:
+                            near_flood = True
+                            break
 
-        # Also check debris proximity
-        in_debris = False
-        for poly_pts in debris_polys:
-            if len(poly_pts) >= 3:
-                cv_poly = np.array(poly_pts, dtype=np.float32)
-                if cv2.pointPolygonTest(cv_poly, b_pt, False) >= 0:
-                    in_debris = True
-                    break
+            if in_flood:
+                priority = "Critical (Direct Inundation)"
+                depth = "Submerged / Water Extent"
+                exposed_high += 1
+            elif in_debris:
+                priority = "High (Debris / Mud Flow Risk)"
+                depth = "Scour Hazard"
+                exposed_medium += 1
+            elif near_flood:
+                priority = "Medium (Floodplain Margin Buffer)"
+                depth = "Perimeter Alert"
+            else:
+                priority = "Low (Elevated / Safe)"
+                depth = "Dry Ground"
 
-        if max_dist >= 0:
-            priority = "Critical (Direct Inundation)"
-            depth = "1.2m - 2.4m"
-            exposed_high += b_count
-        elif in_debris:
-            priority = "High (Debris / Mud Flow Risk)"
-            depth = "0.5m - 1.2m Debris"
-            exposed_high += int(b_count * 0.7)
-            exposed_medium += int(b_count * 0.3)
-        elif max_dist >= -0.004:
-            priority = "Medium (Flood Perimeter Buffer)"
-            depth = "0.4m - 0.9m"
-            exposed_high += int(b_count * 0.5)
-            exposed_medium += int(b_count * 0.5)
-        else:
-            priority = "Low (Elevated / Safe)"
-            depth = "Dry Ground"
+            if in_flood or in_debris or near_flood or b_idx < 15:
+                building_features.append({
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [round(bx, 5), round(by, 5)]},
+                    "properties": {
+                        "name": b_name,
+                        "type": b_type,
+                        "priority": priority,
+                        "depth": depth,
+                        "osm_id": b.get("osm_id", b_idx)
+                    }
+                })
+        total_buildings = len(osm_buildings)
+    else:
+        total_buildings = 0
 
-        if max_dist >= -0.004 or in_debris or b_idx < 4:
-            building_features.append({
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [round(bx, 5), round(by, 5)]},
-                "properties": {
-                    "name": f"{b_name} Structure Cluster",
-                    "count": b_count,
-                    "priority": priority,
-                    "depth": depth
-                }
-            })
-
-    total_buildings = max(exposed_high + exposed_medium + 40, int(area_km2 * 0.08))
     isolated_cnt_strict = sum(1 for s in settlement_list if s["status"] == "isolated")
     detour_cnt_strict = sum(1 for s in settlement_list if s["status"] == "detour")
     
     cons_settlement_list = []
-    for s_idx, s_data in enumerate(osm_settlements[:10]):
+    for s_idx, s_data in enumerate(osm_settlements[:15]):
         s_id = s_data["osm_id"]
-        c_res = conservative_dijkstra.get(s_id, {})
-        pop = 250 + ((s_idx * 170 + int(area_km2)) % 600)
+        if s_id in unconnected_settlements:
+            c_status = "unknown"
+            c_detour = None
+        else:
+            c_res = conservative_dijkstra.get(s_id, {})
+            c_status = c_res.get("status", "reachable")
+            c_detour = round(c_res.get("detour_factor", 1.0), 2) if c_res.get("detour_factor") else None
+
+        pop = s_data.get("population") or (250 + ((s_idx * 170 + int(area_km2)) % 600))
         cons_settlement_list.append({
             "osm_id": s_id,
             "name": s_data["name"],
-            "status": c_res.get("status", "reachable"),
-            "detour_factor": round(c_res.get("detour_factor", 1.0), 2) if c_res.get("detour_factor") else None,
+            "status": c_status,
+            "detour_factor": c_detour,
             "population": pop,
             "coordinates": [s_data["lon"], s_data["lat"]]
         })

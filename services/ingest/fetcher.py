@@ -1,3 +1,6 @@
+import os
+import io
+import tarfile
 import httpx
 try:
     import backoff
@@ -10,49 +13,66 @@ except ImportError:
             return decorator
         expo = None
     backoff = _MockBackoff()
+
 try:
     import rasterio
 except ImportError:
     rasterio = None
-from typing import List, Dict, Any
+
+from typing import List, Dict, Any, Optional
 from .auth import auth_manager
 
 PROCESS_URL = "https://sh.dataspace.copernicus.eu/api/v1/process"
 
-# Evaluation script for Sentinel-1 GRD (GAMMA0_TERRAIN)
-EVAL_SCRIPT = """
+EVAL_SCRIPT_TIFF = """
 //VERSION=3
 function setup() {
   return {
-    input: ["VV", "VH", "dataMask"],
-    output: [
-      { id: "VV", bands: 1, sampleType: "FLOAT32" },
-      { id: "VH", bands: 1, sampleType: "FLOAT32" },
-      { id: "dataMask", bands: 1, sampleType: "UINT8" }
-    ]
+    input: ["VV", "VH"],
+    output: { id: "default", bands: 2, sampleType: "FLOAT32" }
   };
 }
 function evaluatePixel(samples) {
-  return {
-    VV: [samples.VV],
-    VH: [samples.VH],
-    dataMask: [samples.dataMask]
-  };
+  return [samples.VV, samples.VH];
 }
 """
 
+_last_fetch_error: Optional[str] = None
+
+def get_last_fetch_error() -> Optional[str]:
+    return _last_fetch_error
+
 @backoff.on_exception(backoff.expo, httpx.RequestError, max_tries=3)
-def fetch_s1_cog(bbox: List[float], start_time: str, end_time: str, output_path: str):
+def fetch_s1_cog(bbox: List[float], start_time: str, end_time: str, output_path: str) -> bool:
     """
-    Fetch S1 GRD data via Sentinel Hub Process API and save as COG.
-    Requests orthorectified GAMMA0_TERRAIN using Copernicus 30m DEM.
+    Fetch S1 GRD data via Sentinel Hub Process API and save as GeoTIFF.
+    Requests orthorectified GAMMA0_TERRAIN (VV + VH) using Copernicus 30m DEM.
+    Returns True if successfully retrieved and saved, False otherwise.
     """
-    token = auth_manager.get_token()
+    global _last_fetch_error
+    _last_fetch_error = None
+
+    if not auth_manager.is_configured():
+        _last_fetch_error = "CDSE credentials not configured in .env (CDSE_CLIENT_ID / CDSE_CLIENT_SECRET)"
+        return False
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    
+    try:
+        token = auth_manager.get_token()
+    except Exception as e:
+        _last_fetch_error = str(e)
+        return False
+
     headers = {
         "Authorization": f"Bearer {token}",
-        "Accept": "application/tar"
+        "Accept": "image/tiff"
     }
-    
+
+    # Format timestamps for CDSE API
+    s_time = start_time if "T" in start_time else f"{start_time}T00:00:00Z"
+    e_time = end_time if "T" in end_time else f"{end_time}T23:59:59Z"
+
     payload = {
         "input": {
             "bounds": {
@@ -63,8 +83,8 @@ def fetch_s1_cog(bbox: List[float], start_time: str, end_time: str, output_path:
                 "type": "sentinel-1-grd",
                 "dataFilter": {
                     "timeRange": {
-                        "from": start_time,
-                        "to": end_time
+                        "from": s_time,
+                        "to": e_time
                     },
                     "acquisitionMode": "IW",
                     "polarization": "DV",
@@ -78,18 +98,36 @@ def fetch_s1_cog(bbox: List[float], start_time: str, end_time: str, output_path:
             }]
         },
         "output": {
-            "width": 1024,  # Adjust based on bbox size for 10m resolution
-            "height": 1024,
+            "width": 512,
+            "height": 512,
             "responses": [
-                {"identifier": "VV", "format": {"type": "image/tiff"}},
-                {"identifier": "VH", "format": {"type": "image/tiff"}},
-                {"identifier": "dataMask", "format": {"type": "image/tiff"}}
+                {"identifier": "default", "format": {"type": "image/tiff"}}
             ]
         },
-        "evalscript": EVAL_SCRIPT
+        "evalscript": EVAL_SCRIPT_TIFF
     }
-    
-    # In a real implementation, we would handle the tar response and save COGs.
-    # We would also calculate the exact width/height based on bbox to ensure 10m resolution.
-    # This is a stub for the hackathon prototype.
-    pass
+
+    try:
+        response = httpx.post(PROCESS_URL, headers=headers, json=payload, timeout=60.0)
+        if response.status_code == 200 and len(response.content) > 1000:
+            content_type = response.headers.get("content-type", "")
+            if "tar" in content_type:
+                # Extract first TIFF from tar
+                with tarfile.open(fileobj=io.BytesIO(response.content)) as tar:
+                    for member in tar.getmembers():
+                        if member.name.endswith(".tif") or member.name.endswith(".tiff"):
+                            f = tar.extractfile(member)
+                            if f:
+                                with open(output_path, "wb") as out:
+                                    out.write(f.read())
+                                return True
+            else:
+                with open(output_path, "wb") as f:
+                    f.write(response.content)
+                return True
+        else:
+            _last_fetch_error = f"CDSE Process API returned HTTP {response.status_code}: {response.text[:180]}"
+    except Exception as e:
+        _last_fetch_error = f"CDSE Process API network exception: {str(e)}"
+
+    return False

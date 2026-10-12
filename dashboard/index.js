@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("HydroViz Educational Prototype initializing with Leaflet...");
+    console.log("HydroViz Himalayan Engine initializing with Leaflet...");
 
     // Check Leaflet availability
     if (typeof L === 'undefined') {
@@ -9,9 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 1. Initialize Map
-    const initialLat = 27.82;
-    const initialLng = 85.55;
-    const initialZoom = 10;
+    const initialLat = 27.92;
+    const initialLng = 85.58;
+    const initialZoom = 11;
 
     const map = L.map('map', {
         center: [initialLat, initialLng],
@@ -21,6 +21,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     L.control.zoom({ position: 'topleft' }).addTo(map);
+
+    // Prevent sidebar wheel scroll from zooming Leaflet map
+    const sidebarEl = document.getElementById('sidebar');
+    if (sidebarEl) {
+        sidebarEl.addEventListener('wheel', (e) => {
+            e.stopPropagation();
+        }, { passive: true });
+    }
+
+    // Ensure Leaflet resizes correctly when window geometry changes
+    window.addEventListener('resize', () => {
+        map.invalidateSize();
+    });
 
     // 2. Base Tile Layers
     const baseLayers = {
@@ -75,11 +88,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const hudTimestamp = document.getElementById('hud-timestamp');
     const scenarioSelect = document.getElementById('scenario-select');
 
+    // Mode Banner Elements
+    const modeBanner = document.getElementById('mode-banner');
+    const modeBannerBadge = document.getElementById('mode-banner-badge');
+    const modeBannerTitle = document.getElementById('mode-banner-title');
+    const modeBannerDesc = document.getElementById('mode-banner-desc');
+    const modeRetryBtn = document.getElementById('mode-retry-btn');
+
     // HUD Metrics
     const metricFloodArea = document.getElementById('metric-flood-area');
+    const metricFloodVal = document.getElementById('metric-flood-val');
     const metricBuildings = document.getElementById('metric-buildings');
     const metricSettlements = document.getElementById('metric-settlements');
     const metricRoads = document.getElementById('metric-roads');
+    const metricRoadsVal = document.getElementById('metric-roads-val');
 
     // Sidebar Badges
     const badgeFlood = document.getElementById('badge-flood');
@@ -88,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const badgeCutoff = document.getElementById('badge-cutoff');
     const badgeRoads = document.getElementById('badge-roads');
 
-    // Tags
+    // Status Tags
     const tagSensor = document.getElementById('tag-sensor');
     const tagOnnx = document.getElementById('tag-onnx');
     const tagDem = document.getElementById('tag-dem');
@@ -123,20 +145,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const cLng = (minLng + maxLng) / 2.0;
         const cLat = (minLat + maxLat) / 2.0;
         
-        if (cLng >= 85.0 && cLng <= 86.0 && cLat >= 27.3 && cLat <= 28.3) {
-            return "Himalayan Bagmati & Melamchi Valley Corridor";
-        } else if (cLng >= 83.5 && cLng <= 84.5 && cLat >= 27.9 && cLat <= 28.6) {
-            return "Seti River Basin & Pokhara Valley (Gandaki)";
-        } else if (cLng >= 85.1 && cLng <= 85.6 && cLat >= 27.5 && cLat <= 27.9) {
+        if (cLng >= 85.45 && cLng <= 86.05 && cLat >= 27.75 && cLat <= 28.25) {
+            return "Melamchi & Helambu Valley Corridor";
+        } else if (cLng >= 85.80 && cLng <= 86.05 && cLat >= 27.70 && cLat <= 28.00) {
+            return "Bhote Koshi River Gorge Corridor";
+        } else if (cLng >= 85.20 && cLng <= 85.45 && cLat >= 27.60 && cLat <= 27.80) {
             return "Kathmandu Valley Metropolitan Basin";
-        } else if (cLng >= 86.5 && cLng <= 88.5 && cLat >= 26.5 && cLat <= 28.2) {
-            return "Koshi River Basin & Eastern Himalayas";
-        } else if (cLng >= 80.8 && cLng <= 82.8 && cLat >= 28.3 && cLat <= 30.2) {
-            return "Karnali River Basin (Western Nepal)";
-        } else if (cLng >= 79.0 && cLng <= 80.6 && cLat >= 29.8 && cLat <= 31.2) {
-            return "Chamoli & Alaknanda Basin (Garhwal)";
-        } else if (cLng >= 88.0 && cLng <= 89.2 && cLat >= 27.4 && cLat <= 28.6) {
-            return "South Lhonak & Teesta Basin (Sikkim)";
+        } else if (cLng >= 85.05 && cLng <= 85.30 && cLat >= 27.80 && cLat <= 28.05) {
+            return "Trishuli River Basin Corridor";
+        } else if (cLng >= 83.5 && cLng <= 84.5 && cLat >= 27.9 && cLat <= 28.6) {
+            return "Seti River Basin & Pokhara Valley";
         } else {
             return `Target AOI Corridor [${cLat.toFixed(2)}°N, ${cLng.toFixed(2)}°E]`;
         }
@@ -173,10 +191,66 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAoiHint();
     }
 
+    // Quick AOI Presets Handling
+    const presetChips = document.querySelectorAll('.preset-chip');
+    presetChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            presetChips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            const bboxStr = chip.dataset.bbox;
+            if (bboxInputEl) {
+                bboxInputEl.value = bboxStr;
+                updateAoiHint();
+            }
+            const parts = bboxStr.split(',').map(s => parseFloat(s.trim()));
+            if (parts.length === 4) {
+                map.flyToBounds([
+                    [parts[1], parts[0]],
+                    [parts[3], parts[2]]
+                ], { padding: [50, 50], duration: 1.0 });
+            }
+        });
+    });
+
     // Set dynamic gateway status in footer
     const gatewayStatusEl = document.querySelector('.status-text');
     if (gatewayStatusEl) {
         gatewayStatusEl.innerText = `Gateway Online: ${window.location.host || 'localhost:8000'}`;
+    }
+
+    // Floating Mode Banner Display Controller
+    function updateModeBanner(mode, facts, errorMsg = null) {
+        if (!modeBanner) return;
+
+        modeBanner.className = 'mode-banner';
+        if (modeRetryBtn) modeRetryBtn.style.display = 'none';
+
+        if (mode === 'failed') {
+            modeBanner.classList.add('failed');
+            modeBannerBadge.innerText = 'ANALYSIS FAILED';
+            modeBannerTitle.innerText = 'Scan Processing Error';
+            modeBannerDesc.innerText = errorMsg || 'Requested operation could not complete. Verify connectivity or parameters and retry.';
+            if (modeRetryBtn) modeRetryBtn.style.display = 'inline-block';
+        } else if (mode === 'partial') {
+            modeBanner.classList.add('partial');
+            modeBannerBadge.innerText = 'PARTIAL RESULT';
+            modeBannerTitle.innerText = 'Satellite Scene Unavailable';
+            modeBannerDesc.innerText = facts?.mode_description || 'No matching Sentinel-1 repeat pass found for this time window. Pre-event OpenStreetMap infrastructure has been mapped.';
+            if (modeRetryBtn) modeRetryBtn.style.display = 'inline-block';
+        } else {
+            modeBanner.classList.add('live');
+            modeBannerBadge.innerText = 'LIVE ANALYSIS COMPLETE';
+            modeBannerTitle.innerText = 'Dynamic Sentinel-1 Retrieval & SAR Delineation';
+            modeBannerDesc.innerText = facts?.mode_description || 'All processing stages completed dynamically with Copernicus satellite observations and elevation data.';
+        }
+
+        modeBanner.style.display = 'flex';
+    }
+
+    if (modeRetryBtn) {
+        modeRetryBtn.addEventListener('click', () => {
+            if (submitBtn) submitBtn.click();
+        });
     }
 
     // 4. Click Scan Handler (Live Backend Integration)
@@ -196,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const cleanInput = bboxInput.replace(/[\[\]\(\)]/g, '');
             const rawParts = cleanInput.split(/[\s,]+/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
             
-            let minLng = 85.20, minLat = 27.50, maxLng = 85.90, maxLat = 28.15;
+            let minLng = 85.50, minLat = 27.80, maxLng = 85.65, maxLat = 28.05;
             if (rawParts.length === 4) {
                 let [c1, c2, c3, c4] = rawParts;
                 // Auto-detect if user entered [lat1, lon1, lat2, lon2]
@@ -219,12 +293,13 @@ document.addEventListener('DOMContentLoaded', () => {
             statusPanel.style.display = 'block';
             reportPanel.style.display = 'none';
             telemetryHud.style.display = 'none';
+            if (modeBanner) modeBanner.style.display = 'none';
             progressFill.style.width = '10%';
             stepCounter.innerText = 'Stage 1/5';
             progressText.innerText = "Submitting target AOI to HydroViz Gateway...";
             tagSensor.innerText = "SAR: Ingesting";
             tagOnnx.innerText = "ONNX: Standby";
-            tagDem.innerText = "DEM: 30m";
+            tagDem.innerText = "DEM: Loading";
 
             // Clear previous telemetry
             floodLayerGroup.clearLayers();
@@ -263,12 +338,20 @@ document.addEventListener('DOMContentLoaded', () => {
             currentJobId = jobData.job_id;
             reportJobId.innerText = `Job ID: ${currentJobId}`;
 
-            btnText.innerText = "Scanning Satellite AOI...";
+            let isComplete = false;
+            let isCacheHit = (jobData.status === 'cached' || jobData.mode === 'cached');
+
+            if (isCacheHit) {
+                isComplete = true;
+                progressFill.style.width = '100%';
+                stepCounter.innerText = 'Cached';
+                progressText.innerText = "Loaded verified results from cache.";
+            } else {
+                btnText.innerText = "Scanning Satellite AOI...";
+            }
 
             // Poll Job Status until complete
-            let isComplete = false;
             let pollAttempts = 0;
-
             while (!isComplete && pollAttempts < 60) {
                 pollAttempts++;
                 await new Promise(r => setTimeout(r, 400));
@@ -280,16 +363,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         const progress = statusData.progress || 0.0;
                         progressFill.style.width = Math.max(10, Math.round(progress * 100)) + '%';
 
-                        if (statusData.stage === 'satellite_ingest' || statusData.status === 'ingesting') {
+                        if (statusData.status === 'failed') {
+                            isComplete = true;
+                            stepCounter.innerText = 'Failed';
+                            progressText.innerText = statusData.error?.message || "Analysis failed.";
+                            updateModeBanner('failed', null, statusData.error?.message);
+                            break;
+                        } else if (statusData.status === 'partial') {
+                            isComplete = true;
+                            stepCounter.innerText = 'Partial (No Imagery)';
+                            progressText.innerText = statusData.message || "Partial analysis: OSM mapped; satellite imagery unavailable.";
+                        } else if (statusData.stage === 'satellite_ingest' || statusData.status === 'ingesting') {
                             stepCounter.innerText = 'Stage 1/5';
                             progressText.innerText = "Querying Sentinel-1 IW GRD SAR catalog (ESA CDSE)...";
-                            tagSensor.innerText = "SAR: Dual-Pol Calibration";
+                            tagSensor.innerText = "SAR: Orbit Pair Selection";
                         } else if (statusData.stage === 'flood_segmentation' || statusData.status === 'processing') {
                             stepCounter.innerText = 'Stage 2/5';
-                            progressText.innerText = "Executing ONNX INT8 neural flood segmentation inference...";
-                            tagSensor.innerText = "SAR: Calibrated";
+                            progressText.innerText = "Executing SAR change detection & terrain-constrained flood delineation...";
+                            tagSensor.innerText = "SAR: Calibrated (VV/VH)";
                             const elapsedMs = Math.max(16, Math.round(performance.now() - scanStartTime));
-                            tagOnnx.innerText = `ONNX INT8: Inferred (${elapsedMs}ms)`;
+                            tagOnnx.innerText = `Method: Adaptive Otsu (${elapsedMs}ms)`;
                         } else if (statusData.stage === 'exposure_routing' || statusData.status === 'analyzing') {
                             stepCounter.innerText = 'Stage 3/5';
                             progressText.innerText = "Applying Copernicus DEM slope mask & Dijkstra graph routing...";
@@ -320,6 +413,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 hudTimestamp.innerText = s1Date.replace('T', ' ').replace('.000Z', ' UTC').replace('Z', ' UTC');
                 
                 renderJobResults(currentFacts, minLng, minLat, maxLng, maxLat);
+
+                // Update Status Tags dynamically so they reflect actual execution path
+                const factsMode = currentFacts.mode || currentFacts.flood?.mode || 'live_inferred';
+                if (factsMode === 'partial') {
+                    stepCounter.innerText = "Partial (No Imagery)";
+                    tagSensor.innerText = "SAR: No Pass in Window";
+                    tagOnnx.innerText = "Method: Skipped";
+                    tagDem.innerText = "DEM: Copernicus 30m";
+                } else {
+                    stepCounter.innerText = "Complete (Live)";
+                    tagSensor.innerText = "SAR: Live Downloaded";
+                    tagOnnx.innerText = "Method: Otsu + HAND Filter";
+                    tagDem.innerText = "DEM: Copernicus 30m";
+                }
+
+                // Update Mode Banner
+                updateModeBanner(factsMode, currentFacts);
             }
 
             // Show HUD and Report Panel
@@ -333,6 +443,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error("Scan error:", err);
             progressText.innerText = "Error: " + err.message;
+            stepCounter.innerText = 'Failed';
+            tagSensor.innerText = "SAR: Failed";
+            tagOnnx.innerText = "ONNX: Stopped";
+            updateModeBanner('failed', null, err.message);
             submitBtn.classList.remove('scanning');
             btnText.innerText = "Re-scan AOI";
             isScanning = false;
@@ -346,43 +460,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const debrisArea = facts.debris?.debris_area_km2 ?? (facts.layers?.debris?.features ? (facts.layers.debris.features.length * 1.8).toFixed(1) : 0);
         const exposedBuildings = facts.exposure?.buildings?.exposed_high ?? facts.exposure?.buildings_exposed_high ?? 0;
 
-        metricFloodArea.innerHTML = `${floodArea} <span class="unit">km²</span>`;
+        if (metricFloodVal) metricFloodVal.textContent = floodArea;
+        else metricFloodArea.innerHTML = `${floodArea} <span class="unit">km²</span>`;
         metricBuildings.innerText = exposedBuildings;
-
-        // Update sidebar layer badges
-        if (badgeFlood) badgeFlood.innerText = `${floodArea} km² Flooded`;
-        if (badgeDebris) badgeDebris.innerText = `${debrisArea} km² Debris`;
+        
+        if (badgeFlood) badgeFlood.innerText = `${floodArea} km² Flood`;
+        if (badgeDebris) badgeDebris.innerText = `${debrisArea} km² Hazard`;
         if (badgeBuildings) badgeBuildings.innerText = `${exposedBuildings} Structures`;
-
-        // Clear previous vector layers
-        floodLayerGroup.clearLayers();
-        debrisLayerGroup.clearLayers();
-        buildingsLayerGroup.clearLayers();
-        cutoffLayerGroup.clearLayers();
-        roadsLayerGroup.clearLayers();
 
         const layers = facts.layers || {};
 
-        // A. Flood Inundation Polygons
+        // A. Flood Inundation Layer
         if (layers.flood && layers.flood.features) {
-            layers.flood.features.forEach((feature, idx) => {
+            layers.flood.features.forEach((feature) => {
                 const polygon = L.geoJSON(feature, {
                     style: {
                         color: '#00e5ff',
                         weight: 2,
                         opacity: 0.9,
                         fillColor: '#00e5ff',
-                        fillOpacity: 0.52
+                        fillOpacity: 0.45
                     }
                 });
 
-                const props = feature.properties || {};
                 polygon.bindPopup(`
-                    <div class="custom-popup-title" style="color: #00e5ff;">🌊 ${props.name || 'SAR Inundated Basin'} [Sector ${idx + 1}]</div>
+                    <div class="custom-popup-title" style="color: #00e5ff;">🌊 SAR Inundated Floodwater</div>
                     <div class="custom-popup-body">
-                        <strong>Confidence:</strong> ${props.confidence || (Math.round((facts.flood?.mean_confidence || 0.92) * 100) + '%')} (VV/VH Drop)<br>
-                        <strong>Estimated Water Depth:</strong> ${props.estimated_depth || '0.8m - 2.2m'}<br>
-                        <strong>Inundated Area:</strong> ${props.area_km2 != null ? props.area_km2 + ' km²' : floodArea + ' km²'}
+                        <strong>Model Inference:</strong> ${facts.flood?.model || 'Dual-Pol S1 Change Delineation'}<br>
+                        <strong>Detected Flood Area:</strong> ${floodArea} km²<br>
+                        <strong>HAND Filter:</strong> &le; ${facts.options?.hand_threshold_m || 15}m valley floor
                     </div>
                 `);
 
@@ -390,23 +496,23 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // B. Debris & Scour Field Polygons (Amber)
+        // B. Debris & Scour Field
         if (layers.debris && layers.debris.features) {
             layers.debris.features.forEach((feature, idx) => {
                 const polygon = L.geoJSON(feature, {
                     style: {
-                        color: '#ffaa00',
-                        weight: 1.8,
+                        color: '#f59e0b',
+                        weight: 1.5,
                         opacity: 0.85,
                         dashArray: '5, 5',
-                        fillColor: '#ffaa00',
-                        fillOpacity: 0.36
+                        fillColor: '#f59e0b',
+                        fillOpacity: 0.35
                     }
                 });
 
                 const props = feature.properties || {};
                 polygon.bindPopup(`
-                    <div class="custom-popup-title" style="color: #ffaa00;">🪨 ${props.name || 'Debris & Scour Field'} [Zone ${idx + 1}]</div>
+                    <div class="custom-popup-title" style="color: #f59e0b;">🪨 ${props.name || 'Debris & Scour Field'} [Zone ${idx + 1}]</div>
                     <div class="custom-popup-body">
                         <strong>Hazard Classification:</strong> ${props.hazard_type || 'Heuristic Disturbed Ground'}<br>
                         <strong>Slope / Flank:</strong> ${props.slope || '12° - 25° Channel Flank'}<br>
@@ -415,34 +521,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 `);
 
                 debrisLayerGroup.addLayer(polygon);
-            });
-        }
-
-        // C. Flooded Road Links
-        if (layers.roads && layers.roads.features) {
-            layers.roads.features.forEach((feature) => {
-                const roadLine = L.geoJSON(feature, {
-                    style: {
-                        color: '#ffd600',
-                        weight: 3.5,
-                        opacity: 0.9,
-                        dashArray: '6, 6'
-                    }
-                });
-
-                const props = feature.properties || {};
-                const isSevered = props.status && props.status.toLowerCase().includes('impassable');
-                roadLine.bindPopup(`
-                    <div class="custom-popup-title" style="color: #ffd600;">🚧 ${props.name || 'Road Corridor'}</div>
-                    <div class="custom-popup-body">
-                        <strong>OSM Classification:</strong> ${props.classification || 'Highway'}<br>
-                        <strong>Status:</strong> ${props.status || (isSevered ? 'Impassable (Water depth > 0.8m)' : 'Passable')}<br>
-                        <strong>Segment Submerged:</strong> ${props.submerged_km != null && props.submerged_km > 0 ? props.submerged_km + ' km' : '0.0 km (Passable)'}<br>
-                        <strong>Total Segment Length:</strong> ${props.length_km != null ? props.length_km + ' km' : '--'}
-                    </div>
-                `);
-
-                roadsLayerGroup.addLayer(roadLine);
             });
         }
 
@@ -463,9 +541,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 marker.bindPopup(`
                     <div class="custom-popup-title" style="color: #ff3366;">⚠️ ${props.name || 'Structure Footprint'}</div>
                     <div class="custom-popup-body">
-                        <strong>Structures in Cluster:</strong> ${props.count != null ? props.count : 12} buildings<br>
-                        <strong>Hazard Priority:</strong> ${props.priority || 'Flooded Perimeter'}<br>
-                        <strong>Estimated Water Depth:</strong> ${props.depth || '0.8m - 1.8m'}
+                        <strong>Source:</strong> Pre-event OpenStreetMap<br>
+                        <strong>OSM ID:</strong> ${props.osm_id || 'OSM Way'}<br>
+                        <strong>Exposure Level:</strong> ${props.exposure || 'Direct Flood Inundation'}<br>
+                        <strong>Note:</strong> Measured physical exposure, distinct from confirmed structural collapse.
                     </div>
                 `);
                 buildingsLayerGroup.addLayer(marker);
@@ -484,7 +563,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 : (facts.exposure?.roads_km?.exposed_strict ?? facts.exposure?.roads_km?.exposed ?? 0);
 
             metricSettlements.innerText = isolatedCount;
-            metricRoads.innerHTML = `${exposedRoadsKm} <span class="unit">km</span>`;
+            if (metricRoadsVal) metricRoadsVal.textContent = exposedRoadsKm;
+            else metricRoads.innerHTML = `${exposedRoadsKm} <span class="unit">km</span>`;
             if (badgeCutoff) badgeCutoff.innerText = `${isolatedCount} Hamlets`;
             if (badgeRoads) badgeRoads.innerText = `${exposedRoadsKm} km Severed`;
 
@@ -498,7 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const roadLine = L.geoJSON(feature, {
                         style: {
-                            color: isCut ? (isSeveredWater ? '#ffd600' : '#ffaa00') : '#52b788',
+                            color: isCut ? (isSeveredWater ? '#ffd600' : '#f59e0b') : '#52b788',
                             weight: isCut ? 3.5 : 2.5,
                             opacity: 0.9,
                             dashArray: isCut ? '6, 6' : null
@@ -550,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <strong>Population:</strong> ${s.population != null ? s.population + ' Residents' : 'N/A'}<br>
                         <strong>Status:</strong> ${isIsolated ? 'Completely Cut-Off (Isolated)' : isDetour ? 'Highland Detour Required' : isUnknown ? 'Missing Baseline Link (Unknown)' : 'Reachable'}<br>
                         ${s.detour_factor ? `<strong>Detour Factor:</strong> ${s.detour_factor}x<br>` : ''}
-                        <strong>Details:</strong> ${isIsolated ? 'Road access submerged by floodwaters; zero alternate route' : isDetour ? 'Primary road severed; highland bypass operational' : isUnknown ? 'Pre-event road network unmapped in OSM (labeled unknown)' : 'Road access link intact and passable'}
+                        <strong>Details:</strong> ${isIsolated ? 'All road connections to destination hubs are severed by hazard extents' : isDetour ? 'Primary road severed; alternate highland detour route remains open' : isUnknown ? 'Pre-event road network unmapped in OSM' : 'Road access link intact and passable'}
                     </div>
                 `);
                 cutoffLayerGroup.addLayer(marker);
@@ -574,7 +654,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const cleanInput = bboxInput.replace(/[\[\]\(\)]/g, '');
         const rawParts = cleanInput.split(/[\s,]+/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
         
-        let bbox = [85.20, 27.50, 85.90, 28.15];
+        let bbox = [85.50, 27.80, 85.65, 28.05];
         if (rawParts.length === 4) {
             let [c1, c2, c3, c4] = rawParts;
             if ((c1 >= 15 && c1 <= 40 && c2 >= 60 && c2 <= 105) || (Math.abs(c1) < 45 && Math.abs(c2) > 60)) {
@@ -596,51 +676,76 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             });
 
-            if (traceRes.ok) {
-                const traceData = await traceRes.json();
-                const pathFeature = traceData.path;
-                const props = pathFeature.properties || {};
-
-                // Render flow line
-                const flowLine = L.geoJSON(pathFeature, {
-                    style: {
-                        color: '#00e5ff',
-                        weight: 4,
-                        opacity: 0.95,
-                        dashArray: '4, 8'
-                    }
-                });
-
-                // Start Marker
-                const startCircle = L.circleMarker([origin[1], origin[0]], {
-                    radius: 7,
-                    color: '#ffffff',
-                    fillColor: '#00e5ff',
-                    fillOpacity: 1,
-                    weight: 2
-                });
-
-                startCircle.bindPopup(`
-                    <div class="custom-popup-title" style="color: #00e5ff;">💧 D8 Downhill Flow Path</div>
-                    <div class="custom-popup-body">
-                        <strong>Source Coordinates:</strong> ${origin[1].toFixed(5)}, ${origin[0].toFixed(5)}<br>
-                        <strong>Start Elevation:</strong> ${props.start_elevation_m != null ? props.start_elevation_m + 'm' : '--'}<br>
-                        <strong>Terminal Elevation:</strong> ${props.end_elevation_m != null ? props.end_elevation_m + 'm' : '--'}<br>
-                        <strong>Total Vertical Drop:</strong> ${props.drop_m != null ? props.drop_m + 'm' : '--'}<br>
-                        <strong>Downstream Distance:</strong> ${props.distance_km != null ? props.distance_km + ' km' : '--'}<br>
-                        <strong>Routing:</strong> D8 Steepest Descent on Conditioned DEM
-                    </div>
-                `);
-
-                traceLayerGroup.addLayer(flowLine);
-                traceLayerGroup.addLayer(startCircle);
-                startCircle.openPopup();
-
-                clearTraceBtn.style.display = 'inline-block';
-                return traceData;
+            if (!traceRes.ok) {
+                throw new Error(`Gateway returned HTTP ${traceRes.status}`);
             }
+
+            const traceData = await traceRes.json();
+            if (traceData.status === 'unavailable' || !traceData.path) {
+                alert(traceData.message || "Georeferenced DEM data is not available for this coordinate to compute downhill flow routing.");
+                traceBtnLabel.innerText = "Click on Map to Trace";
+                return null;
+            }
+
+            const pathFeature = traceData.path;
+            const props = pathFeature.properties || {};
+
+            // Render flow line
+            const flowLine = L.geoJSON(pathFeature, {
+                style: {
+                    color: '#00e5ff',
+                    weight: 4,
+                    opacity: 0.95,
+                    dashArray: '4, 8'
+                }
+            });
+
+            // Start Marker
+            const startCircle = L.circleMarker([origin[1], origin[0]], {
+                radius: 7,
+                color: '#ffffff',
+                fillColor: '#00e5ff',
+                fillOpacity: 1,
+                weight: 2
+            });
+
+            const settlementsList = props.settlements_along_path || traceData.settlements_along_path || [];
+            let settlementsHtml = '';
+            if (settlementsList.length > 0) {
+                settlementsHtml = `
+                    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.15);">
+                        <strong style="color: #00e5ff;">🏘️ Settlements Along Path (${settlementsList.length}):</strong>
+                        <ul style="margin: 4px 0 0 0; padding-left: 16px; font-size: 11px; line-height: 1.4; color: #cbd5e1;">
+                            ${settlementsList.map(s => `<li><strong>${s.name}</strong> (${s.place}) — ${s.distance_downstream_km} km downstream</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            startCircle.bindPopup(`
+                <div class="custom-popup-title" style="color: #00e5ff;">💧 D8 Downhill Flow Path</div>
+                <div class="custom-popup-body">
+                    <strong>Source Coordinates:</strong> ${origin[1].toFixed(5)}, ${origin[0].toFixed(5)}<br>
+                    <strong>Start Elevation:</strong> ${props.start_elevation_m != null ? props.start_elevation_m + 'm' : '--'}<br>
+                    <strong>Terminal Elevation:</strong> ${props.end_elevation_m != null ? props.end_elevation_m + 'm' : '--'}<br>
+                    <strong>Total Vertical Drop:</strong> ${props.drop_m != null ? props.drop_m + 'm' : '--'}<br>
+                    <strong>Downstream Distance:</strong> ${props.distance_km != null ? props.distance_km + ' km' : '--'}<br>
+                    <strong>Routing:</strong> D8 Steepest Descent on Copernicus 30m DEM<br>
+                    ${settlementsHtml}
+                    <span style="font-size: 10px; color: #94a3b8; display: block; margin-top: 6px;">Notice: Bare-earth terrain runoff model, not proof of historical debris flood extent.</span>
+                </div>
+            `);
+
+            traceLayerGroup.addLayer(flowLine);
+            traceLayerGroup.addLayer(startCircle);
+            startCircle.openPopup();
+
+            clearTraceBtn.style.display = 'inline-block';
+            return traceData;
+
         } catch (err) {
             console.error("Trace error:", err);
+            alert("Could not compute flow path: " + err.message);
         } finally {
             traceBtnLabel.innerText = "Click on Map to Trace";
         }
@@ -708,7 +813,48 @@ document.addEventListener('DOMContentLoaded', () => {
         else map.removeLayer(roadsLayerGroup);
     });
 
-    // 8. Situation Report Modal & Language Switcher
+    // 8. Collapsible Map Legend Toggle
+    const legendToggleHeader = document.getElementById('legend-toggle-header');
+    const legendContent = document.getElementById('legend-content');
+    const legendCollapseIcon = document.getElementById('legend-collapse-icon');
+    if (legendToggleHeader && legendContent) {
+        legendToggleHeader.addEventListener('click', () => {
+            const isHidden = legendContent.style.display === 'none';
+            legendContent.style.display = isHidden ? 'flex' : 'none';
+            if (legendCollapseIcon) {
+                legendCollapseIcon.innerText = isHidden ? '▾' : '▸';
+            }
+        });
+    }
+
+    // 9. D8 Hydrologic Flow Help Modal Handlers
+    const d8InfoBtn = document.getElementById('d8-info-btn');
+    const d8Modal = document.getElementById('d8-modal');
+    const d8ModalCloseBtn = document.getElementById('d8-modal-close-btn');
+    const d8ModalOkBtn = document.getElementById('d8-modal-ok-btn');
+
+    if (d8InfoBtn && d8Modal) {
+        d8InfoBtn.addEventListener('click', () => {
+            d8Modal.style.display = 'flex';
+        });
+    }
+    if (d8ModalCloseBtn && d8Modal) {
+        d8ModalCloseBtn.addEventListener('click', () => {
+            d8Modal.style.display = 'none';
+        });
+    }
+    if (d8ModalOkBtn && d8Modal) {
+        d8ModalOkBtn.addEventListener('click', () => {
+            d8Modal.style.display = 'none';
+        });
+    }
+    if (d8Modal) {
+        d8Modal.addEventListener('click', (e) => {
+            if (e.target === d8Modal) d8Modal.style.display = 'none';
+        });
+    }
+
+    // 10. Situation Report Modal & Language Switcher
     async function loadSituationReport(jobId, lang) {
         if (!jobId) return;
 
@@ -779,23 +925,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const flood = currentFacts?.flood?.flooded_area_km2 ?? 0;
         const bld = currentFacts?.exposure?.buildings?.exposed_high ?? 0;
         const hamlets = currentFacts?.cutoff?.isolated_settlements ?? 0;
-        const roads = currentFacts?.exposure?.roads_km?.exposed ?? 0;
-
-        const text = `HydroViz Incident Situation Report (${currentJobId})\nTotal Flooded Area: ${flood} km²\nExposed Buildings: ${bld}\nIsolated Settlements: ${hamlets}\nSubmerged Roads: ${roads} km\nData Source: Sentinel-1 IW SAR Dual-Pol (Copernicus)`;
-        
+        const roads = currentFacts?.exposure?.roads_km?.exposed_strict ?? 0;
+        const text = `HYDROVIZ INCIDENT BRIEF: Flood Area: ${flood} km², Exposed Buildings: ${bld}, Isolated Hamlets: ${hamlets}, Severed Roads: ${roads} km.`;
         navigator.clipboard.writeText(text).then(() => {
-            modalCopyBtn.innerText = "Copied to Clipboard!";
-            setTimeout(() => { modalCopyBtn.innerText = "Copy Summary"; }, 2000);
+            modalCopyBtn.innerText = 'Copied!';
+            setTimeout(() => { modalCopyBtn.innerText = 'Copy Summary'; }, 2000);
         });
     });
 
-    reportModal.addEventListener('click', (e) => {
-        if (e.target === reportModal) {
-            reportModal.style.display = 'none';
-        }
-    });
+    if (reportModal) {
+        reportModal.addEventListener('click', (e) => {
+            if (e.target === reportModal) reportModal.style.display = 'none';
+        });
+    }
 
-    // 9. Case Study (Copernicus EMSR927) Modal Handlers
+    // 11. Case Study Modal Handlers
     const caseStudyModal = document.getElementById('case-study-modal');
     const viewCaseStudyBtn = document.getElementById('view-case-study-btn');
     const sidebarCaseStudyBtn = document.getElementById('sidebar-case-study-btn');
@@ -844,7 +988,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 10. Legal Attribution & Responsibility Modal Handlers
+    // 12. Legal Attribution & Responsibility Modal Handlers
     const attributionModal = document.getElementById('attribution-modal');
     const attributionInfoBtn = document.getElementById('attribution-info-btn');
     const attributionModalCloseBtn = document.getElementById('attribution-modal-close-btn');

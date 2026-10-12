@@ -22,8 +22,13 @@ def extract_numbers(text: str) -> List[str]:
     """
     Extracts all standalone numerals (including decimals) from text.
     Handles Devanagari digits and comma-separated numbers (e.g. 1,000).
+    Strips HTML style/script blocks and tags so styling numbers do not interfere with factual auditing.
     """
-    normalized = normalise_devanagari_digits(text)
+    # Strip style and script blocks
+    cleaned_html = re.sub(r'<style.*?>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    cleaned_html = re.sub(r'<script.*?>.*?</script>', '', cleaned_html, flags=re.DOTALL | re.IGNORECASE)
+    cleaned_html = re.sub(r'<[^>]+>', ' ', cleaned_html)
+    normalized = normalise_devanagari_digits(cleaned_html)
     # Remove commas between digits to handle formatting like 1,500
     cleaned = re.sub(r'(?<=\d),(?=\d)', '', normalized)
     return re.findall(r'\b\d+(?:\.\d+)?\b', cleaned)

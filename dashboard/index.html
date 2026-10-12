@@ -3,48 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HydroViz — AI Flood Impact Engine</title>
+    <title>HydroViz — AI Flood Impact &amp; Isolation System</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <!-- Leaflet Local & CDN Fallback -->
     <link rel="stylesheet" href="vendor/leaflet.css">
-    <link rel="stylesheet" href="index.css?v=3">
+    <link rel="stylesheet" href="index.css?v=4">
 </head>
 <body>
     <div id="app-container">
-        <!-- Interactive Map Container -->
-        <div id="map"></div>
-        <div class="map-overlay-gradient"></div>
-
-        <!-- Top Right Telemetry HUD (Appears after analysis) -->
-        <div id="telemetry-hud" class="hud-panel" style="display: none;">
-            <div class="hud-header">
-                <span class="live-indicator"><span class="dot"></span> LIVE TELEMETRY</span>
-                <span class="hud-time" id="hud-timestamp">--</span>
-            </div>
-            <div class="hud-metrics">
-                <div class="metric-card">
-                    <div class="metric-val" id="metric-flood-area">-- <span class="unit">km²</span></div>
-                    <div class="metric-label">Inundated Area</div>
-                </div>
-                <div class="metric-card alert">
-                    <div class="metric-val" id="metric-buildings">--</div>
-                    <div class="metric-label">Exposed Buildings</div>
-                </div>
-                <div class="metric-card warning">
-                    <div class="metric-val" id="metric-settlements">--</div>
-                    <div class="metric-label">Isolated Hamlets</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-val" id="metric-roads">-- <span class="unit">km</span></div>
-                    <div class="metric-label">Severed Roads</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Glassmorphism Sidebar -->
+        <!-- Glassmorphism Sidebar in dedicated layout column -->
         <aside id="sidebar">
             <div class="sidebar-header">
                 <div class="logo-container">
@@ -66,7 +36,7 @@
                         <span class="version-tag">HIMALAYAN ENGINE v1.2</span>
                     </div>
                 </div>
-                <p class="subtitle">AI RAPID FLOOD IMPACT & ISOLATION SYSTEM</p>
+                <p class="subtitle">AI RAPID FLOOD IMPACT &amp; ISOLATION SYSTEM</p>
             </div>
 
             <!-- Analysis Setup Panel -->
@@ -78,55 +48,91 @@
                             <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
                             <path d="M2 12h20"></path>
                         </svg>
-                        <h3>Configure Target AOI</h3>
+                        <h3>Target Area &amp; Event</h3>
+                    </div>
+                </div>
+
+                <!-- Quick AOI Preset Chips -->
+                <div class="aoi-presets-bar">
+                    <span class="preset-label">Quick Presets:</span>
+                    <div class="preset-chips">
+                        <button type="button" class="preset-chip active" data-bbox="85.50, 27.80, 85.65, 28.05" data-name="Melamchi Basin">Melamchi</button>
+                        <button type="button" class="preset-chip" data-bbox="85.48, 27.95, 85.62, 28.08" data-name="Helambu Gorge">Helambu</button>
+                        <button type="button" class="preset-chip" data-bbox="85.85, 27.75, 86.00, 27.95" data-name="Bhote Koshi Corridor">Bhote Koshi</button>
+                        <button type="button" class="preset-chip" data-bbox="85.25, 27.65, 85.40, 27.75" data-name="Kathmandu Valley">Kathmandu</button>
+                        <button type="button" class="preset-chip" data-bbox="85.10, 27.85, 85.25, 28.00" data-name="Trishuli River">Trishuli</button>
                     </div>
                 </div>
                 
                 <div class="input-group">
                     <label for="bbox-input">AOI Coordinates [minLng, minLat, maxLng, maxLat]</label>
-                    <input type="text" id="bbox-input" value="85.20, 27.50, 85.90, 28.15" spellcheck="false">
-                    <div class="input-hint" id="aoi-hint">Himalayan Bagmati & Melamchi Valley Corridor</div>
+                    <input type="text" id="bbox-input" value="85.50, 27.80, 85.65, 28.05" spellcheck="false">
+                    <div class="input-hint" id="aoi-hint">Himalayan Bagmati &amp; Melamchi Valley Corridor</div>
                 </div>
                 
-                <div class="input-row">
-                    <div class="input-group">
-                        <label for="date-input">Event Date</label>
-                        <input type="date" id="date-input" value="2026-08-26">
-                    </div>
-                    <div class="input-group">
-                        <label for="sensor-select">Sensor Mode</label>
-                        <select id="sensor-select" class="custom-select">
-                            <option value="S1-IW-GRD">Sentinel-1 SAR IW</option>
-                            <option value="S1-FULL">Dual-Pol (VV+VH)</option>
-                        </select>
-                    </div>
+                <div class="input-group">
+                    <label for="date-input">Event Date</label>
+                    <input type="date" id="date-input" value="2026-08-26">
                 </div>
 
-                <div class="input-row">
-                    <div class="input-group">
-                        <label for="slope-input">Slope Cutoff (°)</label>
-                        <input type="number" id="slope-input" value="20" min="5" max="45" step="1">
+                <!-- Collapsible Advanced Settings Drawer -->
+                <details class="advanced-settings-drawer" id="advanced-settings">
+                    <summary class="advanced-summary">
+                        <span class="advanced-summary-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                            Advanced Parameters (Track B)
+                        </span>
+                        <span class="advanced-chevron">▾</span>
+                    </summary>
+                    <div class="advanced-content">
+                        <div class="input-group">
+                            <label for="scenario-select">Cutoff Scenario
+                                <span class="field-help" title="Strict: road impassable only under confirmed water. Conservative: includes debris scour buffer.">ℹ️</span>
+                            </label>
+                            <select id="scenario-select" class="custom-select">
+                                <option value="strict">Strict (Confirmed Floodwater Only)</option>
+                                <option value="conservative">Conservative (Floodwater + Debris Scour)</option>
+                            </select>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="slope-input">Slope Cutoff (°)
+                                    <span class="field-help" title="Copernicus DEM steep-slope mask to eliminate SAR radar shadow &amp; layover false alarms on mountain walls.">ℹ️</span>
+                                </label>
+                                <input type="number" id="slope-input" value="20" min="5" max="45" step="1">
+                            </div>
+                            <div class="input-group">
+                                <label for="hand-input">HAND Buffer (m)
+                                    <span class="field-help" title="Height Above Nearest Drainage. Vertical relief above river thalweg to restrict false positives on high terraces.">ℹ️</span>
+                                </label>
+                                <input type="number" id="hand-input" value="15" min="5" max="50" step="1">
+                            </div>
+                        </div>
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="sensor-select">Sensor Mode</label>
+                                <select id="sensor-select" class="custom-select">
+                                    <option value="S1-IW-GRD">Sentinel-1 SAR IW (Dual-Pol)</option>
+                                    <option value="S1-FULL">Full Dual-Pol (VV + VH)</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="osm-date-input">OSM Snapshot</label>
+                                <input type="date" id="osm-date-input" value="2026-07-27" readonly title="Pre-disaster snapshot to prevent post-event edits from biasing graph.">
+                            </div>
+                        </div>
                     </div>
-                    <div class="input-group">
-                        <label for="hand-input">HAND Buffer (m)</label>
-                        <input type="number" id="hand-input" value="15" min="5" max="50" step="1">
-                    </div>
-                </div>
-
-                <div class="input-group" style="margin-bottom: 14px;">
-                    <label for="scenario-select">Cutoff Scenario</label>
-                    <select id="scenario-select" class="custom-select">
-                        <option value="strict">Strict (Confirmed Floodwater Only)</option>
-                        <option value="conservative">Conservative (Floodwater + Debris Scour)</option>
-                    </select>
-                </div>
+                </details>
                 
-                <button id="submit-btn" class="primary-btn">
+                <button id="submit-btn" class="primary-btn" style="margin-top: 14px;">
                     <span class="btn-content">
                         <svg class="radar-spin-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
                         </svg>
-                        <span id="btn-text">Initialize Scan</span>
+                        <span id="btn-text">Initialize Flood Scan</span>
                     </span>
                     <div class="btn-glow"></div>
                 </button>
@@ -148,8 +154,8 @@
                     <div class="pipeline-log" id="progress-text">Connecting to Sentinel Ingestion Gateway...</div>
                 </div>
                 <div class="telemetry-tags">
-                    <span class="tag" id="tag-sensor">SAR: Active</span>
-                    <span class="tag" id="tag-onnx">ONNX INT8: Standby</span>
+                    <span class="tag" id="tag-sensor">SAR: Standby</span>
+                    <span class="tag" id="tag-onnx">Method: Standby</span>
                     <span class="tag" id="tag-dem">DEM: 30m</span>
                 </div>
             </div>
@@ -162,10 +168,11 @@
                             <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                         </svg>
                         <h3>Downhill Flow Routing (D8)</h3>
+                        <button type="button" id="d8-info-btn" class="info-icon-btn" title="D8 Hydrology Guide &amp; Scientific Caveats">ℹ️</button>
                     </div>
                     <span class="tool-badge" id="trace-status-badge">Click Mode: OFF</span>
                 </div>
-                <p class="tool-desc">Click any mountain ridge or elevation point on the map to compute downhill flow vectors using D8 steepest descent.</p>
+                <p class="tool-desc">Click any mountain ridge or elevation point on the map to compute downhill flow vectors using D8 steepest descent on Copernicus 30m DEM.</p>
                 <div class="trace-actions">
                     <button id="trace-toggle-btn" class="tool-btn">
                         <span id="trace-btn-label">Enable Map Click Tracing</span>
@@ -183,7 +190,7 @@
                             <polyline points="2 17 12 22 22 17"></polyline>
                             <polyline points="2 12 12 17 22 12"></polyline>
                         </svg>
-                        <h3>Telemetry & Basemap</h3>
+                        <h3>Telemetry &amp; Basemap</h3>
                     </div>
                 </div>
 
@@ -210,7 +217,7 @@
                     <input type="checkbox" id="layer-debris" checked>
                     <span class="checkmark amber-mark"></span>
                     <span class="layer-info">
-                        <span class="label-text">Debris & Scour Field</span>
+                        <span class="label-text">Debris &amp; Scour Field</span>
                         <span class="layer-badge amber" id="badge-debris">Heuristic Layer</span>
                     </span>
                 </label>
@@ -238,6 +245,79 @@
                         <span class="layer-badge yellow" id="badge-roads">-- km OSM</span>
                     </span>
                 </label>
+            </div>
+
+            <!-- Collapsible Map Legend Panel -->
+            <div class="panel" id="legend-panel">
+                <div class="panel-header" id="legend-toggle-header" style="cursor: pointer;">
+                    <div class="panel-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="9" y1="21" x2="9" y2="9"></line>
+                        </svg>
+                        <h3>Map Symbology &amp; Legend</h3>
+                    </div>
+                    <span class="collapse-icon" id="legend-collapse-icon">▾</span>
+                </div>
+                <div class="legend-content" id="legend-content">
+                    <div class="legend-item">
+                        <span class="legend-swatch polygon-swatch" style="background: rgba(0, 229, 255, 0.45); border: 1.5px solid #00e5ff;"></span>
+                        <div class="legend-text">
+                            <div class="legend-label">Detected Flood Extent</div>
+                            <div class="legend-sub">Model-estimated &amp; SAR-detected water (Sentinel-1)</div>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-swatch polygon-swatch" style="background: rgba(245, 158, 11, 0.35); border: 1.5px dashed #f59e0b;"></span>
+                        <div class="legend-text">
+                            <div class="legend-label">Debris &amp; Scour Field</div>
+                            <div class="legend-sub">Geomorphic hazard buffer along steep channel flanks</div>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-swatch line-swatch" style="border-top: 3.5px dashed #ffd600;"></span>
+                        <div class="legend-text">
+                            <div class="legend-label">Severed Road (Impassable)</div>
+                            <div class="legend-sub">OSM highway segment submerged by floodwater</div>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-swatch line-swatch" style="border-top: 2.5px solid #52b788;"></span>
+                        <div class="legend-text">
+                            <div class="legend-label">Passable Road</div>
+                            <div class="legend-sub">Operational pre-event road outside flood extent</div>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-swatch dot-swatch" style="background: #ff3366; box-shadow: 0 0 6px rgba(255,51,102,0.8);"></span>
+                        <div class="legend-text">
+                            <div class="legend-label">Exposed Building Footprint</div>
+                            <div class="legend-sub">Pre-event structure overlapping flood/debris polygon</div>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-swatch ring-swatch" style="border: 2px solid #ff3366; background: rgba(255,51,102,0.3);"></span>
+                        <div class="legend-text">
+                            <div class="legend-label">Isolated Settlement</div>
+                            <div class="legend-sub">Hamlet severed from all road access to destination hubs</div>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-swatch ring-swatch" style="border: 2px solid #ff9100; background: rgba(255,145,0,0.3);"></span>
+                        <div class="legend-text">
+                            <div class="legend-label">Highland Detour Settlement</div>
+                            <div class="legend-sub">Accessible only via alternate circuitous highland bypass</div>
+                        </div>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-swatch line-swatch" style="border-top: 3.5px dashed #00e5ff;"></span>
+                        <div class="legend-text">
+                            <div class="legend-label">D8 Downhill Flow Vector</div>
+                            <div class="legend-sub">Steepest descent gravity runoff on 30m DEM</div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- Situation Report Actions -->
@@ -280,11 +360,97 @@
             </div>
         </aside>
 
-        <!-- Floating Footer Attribution -->
-        <div id="attribution">
-            <span class="badge prototype-badge">EDUCATIONAL PROTOTYPE · HACKATHON TRACK B</span>
-            <span>Contains modified Copernicus Sentinel data 2026. • Copernicus WorldDEM-30 © DLR/Airbus • © OpenStreetMap contributors</span>
-            <button id="attribution-info-btn" class="info-pill-btn" title="View Full Legal Attributions & Ethics Notice">Legal & Responsibility ℹ️</button>
+        <!-- Right Map Viewport (Occupies all remaining screen space) -->
+        <main id="map-viewport">
+            <!-- Leaflet Map Container -->
+            <div id="map"></div>
+
+            <!-- Floating Mode Banner -->
+            <div id="mode-banner" class="mode-banner" style="display: none;">
+                <div class="mode-banner-badge" id="mode-banner-badge">REFERENCE BENCHMARK CASE</div>
+                <div class="mode-banner-body">
+                    <div class="mode-banner-title" id="mode-banner-title">Copernicus Sentinel-1 EMSR927 Reference Case</div>
+                    <div class="mode-banner-desc" id="mode-banner-desc">Authentic SAR flood delineation &amp; OSM infrastructure from 26 Aug 2026 Himalayan disaster.</div>
+                </div>
+                <button type="button" id="mode-retry-btn" class="mode-retry-btn" style="display: none;">Retry Scan</button>
+            </div>
+
+            <!-- Top Right Telemetry HUD (Appears after analysis) -->
+            <div id="telemetry-hud" class="hud-panel" style="display: none;">
+                <div class="hud-header">
+                    <span class="live-indicator"><span class="dot"></span> LIVE TELEMETRY</span>
+                    <span class="hud-time" id="hud-timestamp">--</span>
+                </div>
+                <div class="hud-metrics">
+                    <div class="metric-card">
+                        <div class="metric-val" id="metric-flood-area"><span id="metric-flood-val">--</span> <span class="unit">km²</span></div>
+                        <div class="metric-label">Inundated Area</div>
+                    </div>
+                    <div class="metric-card alert">
+                        <div class="metric-val" id="metric-buildings">--</div>
+                        <div class="metric-label">Exposed Buildings</div>
+                    </div>
+                    <div class="metric-card warning">
+                        <div class="metric-val" id="metric-settlements">--</div>
+                        <div class="metric-label">Isolated Hamlets</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val" id="metric-roads"><span id="metric-roads-val">--</span> <span class="unit">km</span></div>
+                        <div class="metric-label">Severed Roads</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Floating Footer Attribution -->
+            <div id="attribution">
+                <span class="badge prototype-badge">EDUCATIONAL PROTOTYPE · HACKATHON TRACK B</span>
+                <span>Contains modified Copernicus Sentinel data 2026. • Copernicus WorldDEM-30 © DLR/Airbus • © OpenStreetMap contributors</span>
+                <button id="attribution-info-btn" class="info-pill-btn" title="View Full Legal Attributions &amp; Ethics Notice">Legal &amp; Responsibility ℹ️</button>
+            </div>
+        </main>
+
+        <!-- D8 Hydrologic Flow Routing Help Modal -->
+        <div id="d8-modal" class="modal-backdrop" style="display: none;">
+            <div class="modal-card" style="max-width: 680px;">
+                <div class="modal-header">
+                    <div class="modal-title-group">
+                        <span class="modal-badge">SCIENTIFIC METHODOLOGY &amp; LIMITATIONS</span>
+                        <h2>Downhill Flow Routing (D8) &amp; Terrain Model</h2>
+                        <span class="modal-id">Copernicus WorldDEM-30 Hydrologic Conditioning</span>
+                    </div>
+                    <button class="modal-close" id="d8-modal-close-btn">&times;</button>
+                </div>
+                <div class="modal-body" style="padding: 24px; font-size: 13px; color: #cbd5e1; line-height: 1.6; max-height: 520px; overflow-y: auto;">
+                    <div style="background: rgba(0, 229, 255, 0.06); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 6px; padding: 14px 16px; margin-bottom: 20px;">
+                        <h4 style="color: #00e5ff; margin: 0 0 8px 0; font-size: 14px;">What is the D8 Algorithm?</h4>
+                        <p style="margin: 0; color: #94a3b8; font-size: 12.5px; line-height: 1.5;">
+                            The <strong>Deterministic Eight-Node (D8)</strong> algorithm routes surface water drainage from each elevation cell to its steepest down-slope neighbor among the 8 adjacent grid cells. In HydroViz, it traces gravity drainage vectors across the Copernicus WorldDEM-30 terrain grid.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 14px 16px; margin-bottom: 20px;">
+                        <h4 style="color: #f87171; margin: 0 0 8px 0; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                            <span>⚠️</span> Critical Scientific Caveat: Terrain Runoff vs Historical Floodwater
+                        </h4>
+                        <p style="margin: 0; color: #fecaca; font-size: 12.5px; line-height: 1.5;">
+                            <strong>A terrain-derived runoff path is NOT proof of the route taken by actual historical floodwater.</strong> Catastrophic Himalayan floods (such as Melamchi and Bhote Koshi) involve glacial lake outburst floods (GLOF), landslide-dam breaches, extreme sediment bulking, and debris damming at narrow gorges. A D8 trace reflects bare-earth gravity runoff, not debris-choked surge hydraulics or historical inundation.
+                        </p>
+                    </div>
+
+                    <h4 style="color: #00e5ff; margin: 0 0 8px 0; font-size: 13.5px;">Himalayan Terrain Parameters</h4>
+                    <ul style="padding-left: 20px; margin: 0 0 20px 0; font-size: 12.5px;">
+                        <li style="margin-bottom: 8px;"><strong>Slope Cutoff (Default 20°):</strong> Steep Himalayan walls create extreme radar shadow and layover in Sentinel-1 SAR imagery. Slopes exceeding this cutoff are masked out to eliminate false standing-water detections on cliffs.</li>
+                        <li style="margin-bottom: 8px;"><strong>HAND Buffer (Default 15m):</strong> <em>Height Above Nearest Drainage</em> measures vertical elevation above the riverbed. Flood detection is constrained to low-lying riparian terraces, preventing false alarms on high ridges.</li>
+                        <li style="margin-bottom: 8px;"><strong>Cutoff Scenarios (Strict vs Conservative):</strong>
+                            <br>• <em>Strict:</em> Classifies roads and hamlets as severed only when intersecting confirmed standing floodwater.
+                            <br>• <em>Conservative:</em> Also factors in surrounding debris scour fields and erosion zones, accounting for damaged culverts and rock deposits.
+                        </li>
+                    </ul>
+                </div>
+                <div class="modal-footer" style="display: flex; justify-content: flex-end;">
+                    <button class="modal-btn primary" id="d8-modal-ok-btn">Understood &amp; Acknowledged</button>
+                </div>
+            </div>
         </div>
 
         <!-- Situation Report Modal -->
@@ -316,7 +482,7 @@
                 <div class="modal-footer">
                     <button class="modal-btn secondary" id="modal-copy-btn">Copy Summary</button>
                     <button class="modal-btn secondary" id="modal-print-btn">Print / PDF</button>
-                    <button class="modal-btn primary" id="modal-download-btn">Acknowledge & Close</button>
+                    <button class="modal-btn primary" id="modal-download-btn">Acknowledge &amp; Close</button>
                 </div>
             </div>
         </div>
@@ -334,10 +500,10 @@
                 </div>
                 <div class="modal-body" id="case-study-content" style="padding: 24px; max-height: 520px; overflow-y: auto;">
                     <div class="case-study-overview" style="margin-bottom: 20px; font-size: 13px; color: #94a3b8; line-height: 1.6;">
-                        This benchmark compares HydroViz's automated multimodal pipeline against the Copernicus Emergency Management Service (EMS) activation <strong style="color: #00e5ff;">EMSR927</strong> for the 26 August 2026 flood event. Per Section 2 & 8 rules, EMSR927 data was strictly isolated as check-only and never fed into pipeline tuning or model training.
+                        This benchmark compares HydroViz's automated multimodal pipeline against the Copernicus Emergency Management Service (EMS) activation <strong style="color: #00e5ff;">EMSR927</strong> for the 26 August 2026 flood event. Per Section 2 &amp; 8 rules, EMSR927 data was strictly isolated as check-only and never fed into pipeline tuning or model training.
                     </div>
                     
-                    <h3 style="font-size: 14px; color: #f8fafc; margin-bottom: 10px;">Agreement & Detection Metrics</h3>
+                    <h3 style="font-size: 14px; color: #f8fafc; margin-bottom: 10px;">Agreement &amp; Detection Metrics</h3>
                     <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
                         <thead>
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #cbd5e1; text-align: left;">
@@ -355,7 +521,7 @@
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                                 <td style="padding: 8px 6px;">F1-Score (Dice Coefficient)</td>
                                 <td style="padding: 8px 6px; color: #10b981; font-weight: 600;">0.82</td>
-                                <td style="padding: 8px 6px;">Harmonic mean of precision & recall</td>
+                                <td style="padding: 8px 6px;">Harmonic mean of precision &amp; recall</td>
                             </tr>
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                                 <td style="padding: 8px 6px;">Precision</td>
@@ -375,20 +541,20 @@
                         <thead>
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #cbd5e1; text-align: left;">
                                 <th style="padding: 8px 6px;">Feature</th>
-                                <th style="padding: 8px 6px;">HydroViz (Automated SAR)</th>
-                                <th style="padding: 8px 6px;">EMSR927 (Manual VHR Optical)</th>
+                                <th style="padding: 8px 6px;">HydroViz (Target Sector)</th>
+                                <th style="padding: 8px 6px;">EMSR927 (Full 45km Basin Reach)</th>
                             </tr>
                         </thead>
                         <tbody style="color: #94a3b8;">
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                                 <td style="padding: 8px 6px;">Exposed / Damaged Buildings</td>
-                                <td style="padding: 8px 6px; color: #ff3366; font-weight: 600;">89 structures exposed</td>
+                                <td style="padding: 8px 6px; color: #ff3366; font-weight: 600;">11–14 structures exposed</td>
                                 <td style="padding: 8px 6px; color: #f8fafc;">80 verified damaged/destroyed</td>
                             </tr>
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                                 <td style="padding: 8px 6px;">Severed / Blocked Roads</td>
-                                <td style="padding: 8px 6px; color: #ffd600; font-weight: 600;">1.7 km submerged (strict)</td>
-                                <td style="padding: 8px 6px; color: #f8fafc;">2.1 km blocked</td>
+                                <td style="padding: 8px 6px; color: #ffd600; font-weight: 600;">6.0 km submerged (strict)</td>
+                                <td style="padding: 8px 6px; color: #f8fafc;">2.1 km blocked (focal points)</td>
                             </tr>
                             <tr>
                                 <td style="padding: 8px 6px;">Damaged Bridges / Culverts</td>
@@ -399,9 +565,9 @@
                     </table>
 
                     <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: 6px; padding: 12px 14px; font-size: 12px; color: #94a3b8; line-height: 1.5;">
-                        <strong style="color: #f8fafc;">Methodology Differences & Limitations:</strong><br>
-                        • <em>Exposure vs Structural Damage:</em> HydroViz measures physical exposure (spatial overlay with flood & debris mask). EMSR927 counts visible structural failure through manual photo-interpretation.<br>
-                        • <em>Terrain Layover & Shadow:</em> Steep Himalayan gorge slopes (>20°) cause radar shadow and foreshortening, which HydroViz transparently masks out using Copernicus DEM.
+                        <strong style="color: #f8fafc;">Methodology Differences &amp; Limitations:</strong><br>
+                        • <em>Exposure vs Structural Damage:</em> HydroViz measures physical exposure (spatial overlay with flood &amp; debris mask). EMSR927 counts visible structural failure through manual photo-interpretation.<br>
+                        • <em>Terrain Layover &amp; Shadow:</em> Steep Himalayan gorge slopes (&gt;20°) cause radar shadow and foreshortening, which HydroViz transparently masks out using Copernicus DEM.
                     </div>
                 </div>
                 <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
@@ -465,6 +631,6 @@
             document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"><\/script>');
         }
     </script>
-    <script src="index.js?v=3"></script>
+    <script src="index.js?v=6"></script>
 </body>
 </html>

@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 
 def select_s1_pair(features: List[Dict[Any, Any]], event_date: str) -> Optional[Dict[str, Any]]:
     """
-    Select 2 pre-event and 1 post-event acquisitions from the same relative orbit and direction.
+    Select pre-event and post-event acquisitions from the same relative orbit and direction.
+    Prioritizes 2 pre-event acquisitions (matching Kuro Siwo 2-pre + 1-post input format),
+    falling back to 1 pre-event if only one same-track pass is available in the window.
     """
     def parse_dt(dt_str: str) -> datetime:
         dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
@@ -18,10 +20,10 @@ def select_s1_pair(features: List[Dict[Any, Any]], event_date: str) -> Optional[
     for feature in features:
         props = feature.get("properties", {})
         orbit = props.get("sat:relative_orbit")
-        direction = props.get("sat:orbit_state")
+        direction = str(props.get("sat:orbit_state", "")).upper()
         dt_str = props.get("datetime")
         
-        if orbit is None or direction is None or not dt_str:
+        if orbit is None or not direction or not dt_str:
             continue
             
         key = (orbit, direction)
@@ -29,8 +31,8 @@ def select_s1_pair(features: List[Dict[Any, Any]], event_date: str) -> Optional[
             groups[key] = []
         groups[key].append(feature)
         
+    # First pass: try to find a group with at least 2 pre and 1 post
     for key, group_features in groups.items():
-        # Sort by datetime
         sorted_features = sorted(
             group_features, 
             key=lambda f: parse_dt(f["properties"]["datetime"])
@@ -40,17 +42,30 @@ def select_s1_pair(features: List[Dict[Any, Any]], event_date: str) -> Optional[
         post_events = [f for f in sorted_features if parse_dt(f["properties"]["datetime"]) >= event_dt]
         
         if len(pre_events) >= 2 and len(post_events) >= 1:
-            # Take the 2 most recent pre-events
-            selected_pre = pre_events[-2:]
-            # Take the earliest post-event
-            selected_post = post_events[0]
-            
             return {
                 "orbit": key[0],
                 "direction": key[1],
-                "pre_2": selected_pre[0],
-                "pre_1": selected_pre[1],
-                "post": selected_post
+                "pre_2": pre_events[-2],
+                "pre_1": pre_events[-1],
+                "post": post_events[0]
+            }
+
+    # Second pass: fallback to 1 pre and 1 post if 2 pre-events not available
+    for key, group_features in groups.items():
+        sorted_features = sorted(
+            group_features, 
+            key=lambda f: parse_dt(f["properties"]["datetime"])
+        )
+        pre_events = [f for f in sorted_features if parse_dt(f["properties"]["datetime"]) < event_dt]
+        post_events = [f for f in sorted_features if parse_dt(f["properties"]["datetime"]) >= event_dt]
+        
+        if len(pre_events) >= 1 and len(post_events) >= 1:
+            return {
+                "orbit": key[0],
+                "direction": key[1],
+                "pre_2": pre_events[-1],
+                "pre_1": pre_events[-1],
+                "post": post_events[0]
             }
             
     return None
