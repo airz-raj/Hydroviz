@@ -51,6 +51,19 @@ except ImportError:
             grid = [[1000.0 for _ in range(grid_size)] for _ in range(grid_size)]
             return grid, lats, lons
 
+try:
+    from services.gateway.middleware.logger import SystemLoggerMiddleware, log_system_event, get_system_logs, clear_system_logs
+except ImportError:
+    try:
+        from middleware.logger import SystemLoggerMiddleware, log_system_event, get_system_logs, clear_system_logs
+    except ImportError:
+        def log_system_event(*args, **kwargs): return {}
+        def get_system_logs(*args, **kwargs): return []
+        def clear_system_logs(): pass
+        class SystemLoggerMiddleware:
+            def __init__(self, app): self.app = app
+            async def __call__(self, scope, receive, send): await self.app(scope, receive, send)
+
 app = FastAPI(
     title="HydroViz Gateway API",
     description="Himalayan Flood Response System — Educational Prototype",
@@ -64,6 +77,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SystemLoggerMiddleware)
 
 class JobRequest(BaseModel):
     job_id: Optional[str] = None
@@ -116,11 +130,11 @@ def _now_iso():
 
 def _get_data_dir():
     data_dir = os.getenv("DATA_DIR")
-    if not data_dir:
-        local_data = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
-        if os.path.exists(local_data):
+    local_data = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
+    if not data_dir or (data_dir == '/data' and not os.access('/data', os.W_OK)):
+        if os.path.exists(local_data) and os.access(local_data, os.W_OK):
             return local_data
-        if os.name != 'nt' and os.path.exists('/data'):
+        if os.name != 'nt' and os.path.exists('/data') and os.access('/data', os.W_OK):
             return '/data'
         return os.path.abspath('./data')
     return data_dir
@@ -134,6 +148,9 @@ def _generate_job_hash(request: JobRequest) -> str:
 async def _run_job_pipeline(job_id: str, request: JobRequest):
     """Orchestrates job execution through pipeline milestones M1 to M5."""
     try:
+        request_hash = _generate_job_hash(request)
+        _hash_to_job[request_hash] = job_id
+
         from ingest.worker import process_job as process_ingest
         from flood_ml.workers import process_m3_learned, process_m2_baseline
         from geo_core.worker import process_m4_geo
@@ -199,6 +216,7 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         _jobs[job_id]["progress"] = 0.2
         _jobs[job_id]["updated_at"] = _now_iso()
         
+        log_system_event("satellite_ingest", f"Initiating Sentinel-1/2 ingest for job {job_id} on {request.event_date}", details={"bbox": request.bbox}, level="INFO", category="INGEST")
         ingest_result = await process_ingest(job_id, request.bbox, request.event_date)
         
         with open(facts_file, 'r', encoding='utf-8') as f:
@@ -212,6 +230,8 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         
         with open(facts_file, 'w', encoding='utf-8') as f:
             json.dump(facts, f, indent=2)
+
+        log_system_event("satellite_ingest", f"Satellite ingest complete: status={facts['inputs'].get('ingest_status')}, pair={facts['inputs'].get('s1_pair')}", details=facts["inputs"], level="INFO", category="INGEST")
         
         # 2. Flood analysis / delineation
         _jobs[job_id]["status"] = "processing"
@@ -219,6 +239,7 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         _jobs[job_id]["progress"] = 0.5
         _jobs[job_id]["updated_at"] = _now_iso()
         
+        log_system_event("flood_segmentation", f"Starting ML flood delineation (INT8 ONNX model with HAND < {hand_threshold}m, slope < {steep_slope_deg}°)", details=facts.get("applied_thresholds"), level="INFO", category="ML")
         ml_result = await process_m3_learned(job_id)
         if ml_result.get("status") == "FAILED":
             raise RuntimeError(ml_result.get("error", "Flood delineation pipeline failed"))
@@ -229,6 +250,7 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         _jobs[job_id]["progress"] = 0.8
         _jobs[job_id]["updated_at"] = _now_iso()
         
+        log_system_event("exposure_routing", f"Initiating OSM infrastructure mapping and multi-source Dijkstra routing", level="INFO", category="GEO")
         geo_result = await process_m4_geo(job_id)
         
         # Load the updated facts written by workers
@@ -241,6 +263,7 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         _jobs[job_id]["progress"] = 0.9
         _jobs[job_id]["updated_at"] = _now_iso()
         
+        log_system_event("report_generation", f"Generating bilingual SitRep briefings (EN + NE) with Devanagari Number Guard", level="INFO", category="REPORT")
         try:
             from report.generator import render_report
             render_report(job_id, request.event_date, facts, lang="en")
@@ -262,6 +285,7 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
 
         _jobs[job_id]["mode"] = mode
         _jobs[job_id]["updated_at"] = _now_iso()
+        log_system_event("job_complete", f"Pipeline completed for job {job_id} (mode={mode})", details={"job_id": job_id, "mode": mode}, level="SUCCESS", category="SYSTEM")
         
     except Exception as e:
         if job_id not in _jobs:
@@ -270,6 +294,7 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         import traceback
         _jobs[job_id]["error"] = {"message": str(e), "trace": traceback.format_exc()}
         _jobs[job_id]["updated_at"] = _now_iso()
+        log_system_event("job_failed", f"Pipeline error for job {job_id}: {str(e)}", details={"error": str(e)}, level="ERROR", category="SYSTEM")
 
 @app.get("/health")
 def health_check():
@@ -289,8 +314,27 @@ def _run_pipeline_thread(job_id: str, request: JobRequest):
 
 @app.post("/jobs")
 def create_job(request: JobRequest):
+    request_hash = _generate_job_hash(request)
+    data_dir = _get_data_dir()
+
+    # Check if identical job was previously run and has completed
+    if request_hash in _hash_to_job:
+        cached_id = _hash_to_job[request_hash]
+        cached_job = _jobs.get(cached_id)
+        facts_path = os.path.join(data_dir, "jobs", cached_id, "facts.json")
+        if (cached_job and cached_job.get("status") in ["complete", "partial"]) or os.path.exists(facts_path):
+            log_system_event("job_cache_hit", f"Identical job found in cache: {cached_id}", details={"cached_job_id": cached_id}, level="INFO", category="API")
+            return {
+                "job_id": cached_id,
+                "status": "complete",
+                "stage": "complete",
+                "progress": 1.0,
+                "message": "Returned from cache"
+            }
+
     now = _now_iso()
     job_id = request.job_id or str(uuid.uuid4())
+    _hash_to_job[request_hash] = job_id
     
     _jobs[job_id] = {
         "job_id": job_id,
@@ -307,6 +351,8 @@ def create_job(request: JobRequest):
     thread = threading.Thread(target=_run_pipeline_thread, args=(job_id, request), daemon=True)
     thread.start()
     
+    log_system_event("job_created", f"Job created: {job_id} for date {request.event_date}", details={"job_id": job_id, "bbox": request.bbox, "event_date": request.event_date}, level="INFO", category="API")
+
     return {
         "job_id": job_id,
         "status": "queued",
@@ -440,6 +486,13 @@ def trace_flood_path(request: TraceRequest):
             }
         }
     }
+    log_system_event(
+        "flow_trace",
+        f"D8 flow trace from [{lat0}, {lon0}]: drop={drop}m, dist={dist_km}km, {len(settlements_along_path)} downstream settlements",
+        details={"origin": request.origin, "drop_m": drop, "dist_km": dist_km, "settlements_count": len(settlements_along_path)},
+        level="INFO",
+        category="GEO"
+    )
     return result
 
 @app.get("/jobs/{job_id}/layers")
@@ -530,6 +583,25 @@ def get_case_study_emsr927():
             "Steep Terrain Occlusion: Steep north-facing Himalayan gorge slopes (>20 deg) exhibit radar shadow/layover, which HydroViz transparently masks out."
         ]
     }
+
+@app.get("/system/logs")
+def get_logs_endpoint(limit: int = 150, category: Optional[str] = None):
+    """
+    Returns real-time system logs across satellite ingest, ML inference,
+    OSM feature fetching, Dijkstra routing, and API transactions.
+    """
+    logs = get_system_logs(limit=limit, category=category)
+    return {
+        "logs": logs,
+        "count": len(logs),
+        "total": len(get_system_logs(limit=1000))
+    }
+
+@app.delete("/system/logs")
+def clear_logs_endpoint():
+    """Clears the in-memory circular system log buffer."""
+    clear_system_logs()
+    return {"status": "cleared", "message": "System log buffer cleared"}
 
 # Serve dashboard UI at the root
 dashboard_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'dashboard'))

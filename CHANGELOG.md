@@ -2,6 +2,29 @@
 
 All notable changes to the HydroViz project will be documented in this file.
 
+## [2026-10-12]
+
+- **feat(telemetry-logger-and-api-console):**
+  - Integrated interactive System Logger & API Activity Console into the dashboard HUD (`#system-logger-window`) with dynamic client-side `fetch` interception, 1.5s background polling of `/system/logs`, category filtering (`ALL`, `API`, `INGEST`, `GEO`, `ML`, `REPORT`, `SYSTEM`), real-time search, counter, auto-scroll, and clear controls.
+  - Implemented `SystemLoggerMiddleware` and `log_system_event` in `services/gateway/middleware/logger.py`, logging HTTP method, path, response status, execution latency, and granular worker lifecycle milestones.
+  - Exposed `/system/logs` GET and DELETE endpoints in `services/gateway/main.py`.
+
+- **feat(osm-fetcher-accuracy-and-routing):**
+  - Resolved Overpass API endpoint connection failures and query syntax errors in `services/geo_core/osm_fetcher.py`. Added redundant high-availability mirrors (`overpass.openstreetmap.fr`, `overpass.kumi.systems`, `overpass-api.de`) and disk caching in `data/cache/osm/`.
+  - Upgraded Overpass queries to use valid `out geom 180;` and `out center 150;` geometries.
+  - Expanded road segment processing slice from 20 to 80 and settlements from 15 to 40 in `services/geo_core/worker.py` with multi-node topological snapping within 600m to ensure genuine connectivity and accurate Dijkstra flood severance.
+
+- **feat(gateway-modularization-and-training-pipeline):**
+  - Populated `services/gateway/` subdirectories (`middleware/logger.py`, `models/schemas.py`, `routes/`) with clean modular implementations.
+  - Implemented the complete end-to-end model training and ONNX export pipeline in `training/`: `configs/default_config.yaml`, PyTorch dataset loader `dataset.py`, dual-stream UNet architecture `models.py`, mixed-precision training loop `train.py`, and INT8/FP32 ONNX graph exporter `export_onnx.py`.
+
+- **feat(caching-and-credentials):**
+  - Configured live CDSE Copernicus Data Space API OAuth2 credentials in `.env` and verified token generation.
+  - Re-enabled job-level output caching in `services/gateway/main.py` (`POST /jobs`), avoiding redundant pipeline compute when identical parameters are queried.
+
+- **refactor(cleanup):**
+  - Cleaned repository root directory to retain exclusively `README.md` and `CHANGELOG.md` per project requirements.
+
 ## [2026-10-11]
 
 - **feat(live-satellite-pipeline-and-judge-ready):** Complete end-to-end integration and verification of live Copernicus Data Space Ecosystem satellite ingestion:

@@ -1020,5 +1020,241 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // =========================================================================
+    // 13. Real-Time System Logger & Client-Side API Activity Console
+    // =========================================================================
+    const toggleLoggerBtn = document.getElementById('toggle-logger-btn');
+    const loggerWindow = document.getElementById('system-logger-window');
+    const closeLoggerBtn = document.getElementById('close-logger-btn');
+    const clearLoggerBtn = document.getElementById('clear-logger-btn');
+    const autoscrollLoggerBtn = document.getElementById('autoscroll-logger-btn');
+    const loggerEntries = document.getElementById('logger-entries');
+    const loggerSearchInput = document.getElementById('logger-search-input');
+    const loggerCountPill = document.getElementById('logger-count-pill');
+    const loggerFooterCounter = document.getElementById('logger-footer-counter');
+    const loggerFilterBtns = document.querySelectorAll('.log-filter-btn');
+
+    let allLogs = [];
+    let currentCategory = 'ALL';
+    let searchQuery = '';
+    let autoScroll = true;
+    let loggerOpen = false;
+    let seenLogIds = new Set();
+
+    // Monkey-patch window.fetch to capture client-side API telemetry
+    const originalFetch = window.fetch;
+    window.fetch = async function(...args) {
+        const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+        const options = args[1] || {};
+        const method = options.method || 'GET';
+        const startTime = performance.now();
+
+        // Avoid infinite loop on internal telemetry polling
+        const isTelemetryPoll = url.includes('/system/logs');
+
+        try {
+            const response = await originalFetch.apply(this, args);
+            const durationMs = Math.round(performance.now() - startTime);
+
+            if (!isTelemetryPoll) {
+                const status = response.status;
+                const level = status >= 400 ? 'ERROR' : (status >= 300 ? 'WARN' : 'INFO');
+                addClientLog({
+                    timestamp: new Date().toISOString(),
+                    level: level,
+                    category: 'API',
+                    event: `${method} ${url}`,
+                    message: `${method} ${url} -> HTTP ${status} (${durationMs}ms)`,
+                    details: { status, durationMs }
+                });
+            }
+
+            return response;
+        } catch (error) {
+            const durationMs = Math.round(performance.now() - startTime);
+            if (!isTelemetryPoll) {
+                addClientLog({
+                    timestamp: new Date().toISOString(),
+                    level: 'ERROR',
+                    category: 'API',
+                    event: `${method} ${url}`,
+                    message: `${method} ${url} -> FAILED (${error.message})`,
+                    details: { error: error.message, durationMs }
+                });
+            }
+            throw error;
+        }
+    };
+
+    function formatTime(isoStr) {
+        if (!isoStr) return '';
+        try {
+            const d = new Date(isoStr);
+            return d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3, '0');
+        } catch {
+            return isoStr.slice(11, 19);
+        }
+    }
+
+    function addClientLog(logObj) {
+        logObj.id = logObj.id || ('client_' + Math.random().toString(36).substr(2, 9));
+        if (seenLogIds.has(logObj.id)) return;
+        seenLogIds.add(logObj.id);
+        allLogs.push(logObj);
+        if (allLogs.length > 500) allLogs.shift();
+        updateLogCount();
+        renderFilteredLogs();
+    }
+
+    function updateLogCount() {
+        const cnt = allLogs.length;
+        if (loggerCountPill) loggerCountPill.textContent = cnt;
+        if (loggerFooterCounter) loggerFooterCounter.textContent = `${cnt} events recorded`;
+    }
+
+    function renderFilteredLogs() {
+        if (!loggerEntries) return;
+
+        const filtered = allLogs.filter(log => {
+            const matchesCat = currentCategory === 'ALL' || (log.category && log.category.toUpperCase() === currentCategory);
+            const matchesSearch = !searchQuery || 
+                (log.message && log.message.toLowerCase().includes(searchQuery)) ||
+                (log.event && log.event.toLowerCase().includes(searchQuery)) ||
+                (log.level && log.level.toLowerCase().includes(searchQuery)) ||
+                (log.category && log.category.toLowerCase().includes(searchQuery));
+            return matchesCat && matchesSearch;
+        });
+
+        loggerEntries.innerHTML = '';
+        if (filtered.length === 0) {
+            loggerEntries.innerHTML = '<div style="color: #64748b; padding: 12px; text-align: center; font-style: italic;">No log events matching current filter</div>';
+            return;
+        }
+
+        filtered.forEach(log => {
+            const row = document.createElement('div');
+            const levelClass = (log.level || 'info').toLowerCase();
+            const catClass = (log.category || 'system').toLowerCase();
+            
+            row.className = `log-row ${levelClass === 'error' ? 'error-row' : (levelClass === 'success' ? 'success-row' : '')}`;
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'log-time';
+            timeSpan.textContent = formatTime(log.timestamp);
+            
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = `log-badge ${levelClass}`;
+            badgeSpan.textContent = log.level || 'INFO';
+
+            const catSpan = document.createElement('span');
+            catSpan.className = `log-cat ${catClass}`;
+            catSpan.textContent = log.category || 'SYS';
+
+            const msgSpan = document.createElement('span');
+            msgSpan.className = 'log-msg';
+            msgSpan.textContent = log.message || log.event || '';
+
+            row.appendChild(timeSpan);
+            row.appendChild(badgeSpan);
+            row.appendChild(catSpan);
+            row.appendChild(msgSpan);
+
+            loggerEntries.appendChild(row);
+        });
+
+        if (autoScroll) {
+            loggerEntries.scrollTop = loggerEntries.scrollHeight;
+        }
+    }
+
+    async function fetchSystemLogs() {
+        try {
+            const res = await originalFetch('/system/logs?limit=150');
+            if (res.ok) {
+                const data = await res.json();
+                const serverLogs = data.logs || [];
+                let newAdded = false;
+                serverLogs.forEach(sLog => {
+                    if (!seenLogIds.has(sLog.id)) {
+                        seenLogIds.add(sLog.id);
+                        allLogs.push(sLog);
+                        newAdded = true;
+                    }
+                });
+                if (newAdded) {
+                    allLogs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                    if (allLogs.length > 500) allLogs = allLogs.slice(-500);
+                    updateLogCount();
+                    renderFilteredLogs();
+                }
+            }
+        } catch (err) {
+            // silent catch during offline/startup
+        }
+    }
+
+    // Toggle button handler
+    if (toggleLoggerBtn && loggerWindow) {
+        toggleLoggerBtn.addEventListener('click', () => {
+            loggerOpen = !loggerOpen;
+            loggerWindow.style.display = loggerOpen ? 'flex' : 'none';
+            if (loggerOpen) {
+                renderFilteredLogs();
+                fetchSystemLogs();
+            }
+        });
+    }
+
+    if (closeLoggerBtn && loggerWindow) {
+        closeLoggerBtn.addEventListener('click', () => {
+            loggerOpen = false;
+            loggerWindow.style.display = 'none';
+        });
+    }
+
+    if (clearLoggerBtn) {
+        clearLoggerBtn.addEventListener('click', async () => {
+            allLogs = [];
+            seenLogIds.clear();
+            try {
+                await originalFetch('/system/logs', { method: 'DELETE' });
+            } catch (e) {}
+            updateLogCount();
+            renderFilteredLogs();
+        });
+    }
+
+    if (autoscrollLoggerBtn) {
+        autoscrollLoggerBtn.addEventListener('click', () => {
+            autoScroll = !autoScroll;
+            autoscrollLoggerBtn.classList.toggle('active', autoScroll);
+            autoscrollLoggerBtn.textContent = autoScroll ? 'Scroll: ON' : 'Scroll: OFF';
+            if (autoScroll && loggerEntries) {
+                loggerEntries.scrollTop = loggerEntries.scrollHeight;
+            }
+        });
+    }
+
+    if (loggerSearchInput) {
+        loggerSearchInput.addEventListener('input', (e) => {
+            searchQuery = e.target.value.toLowerCase().trim();
+            renderFilteredLogs();
+        });
+    }
+
+    loggerFilterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            loggerFilterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentCategory = btn.dataset.cat || 'ALL';
+            renderFilteredLogs();
+        });
+    });
+
+    // Start background polling for telemetry
+    setInterval(fetchSystemLogs, 1500);
+    // Initial fetch to load historical startup logs
+    fetchSystemLogs();
+
     console.log("HydroViz Dashboard initialized successfully!");
 });

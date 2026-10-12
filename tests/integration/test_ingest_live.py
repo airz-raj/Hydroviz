@@ -1,6 +1,11 @@
 import os
 import pytest
-import rasterio
+
+try:
+    import rasterio
+except ImportError:
+    rasterio = None
+
 from services.shared.env_loader import load_env
 load_env()
 from services.ingest.auth import auth_manager
@@ -15,6 +20,8 @@ def test_ingest_live(tmp_path):
     Verifies authentication, catalogue STAC search, relative orbit pair matching,
     and genuine SAR & DEM GeoTIFF raster retrieval.
     """
+    if rasterio is None:
+        pytest.skip("rasterio not installed in this environment")
     if not auth_manager.is_configured():
         pytest.skip("CDSE credentials not configured in local environment")
 

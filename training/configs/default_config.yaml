@@ -1,0 +1,43 @@
+# HydroViz ML Flood Delineation Configuration
+# 9-Channel SAR + Copernicus DEM Tensor Training Configuration
+
+experiment_name: "kuro_siwo_himalayan_snunet"
+model:
+  architecture: "snunet_cd"
+  in_channels: 9  # [pre2_VV, pre2_VH, pre1_VV, pre1_VH, post_VV, post_VH, slope, HAND, shadow_mask]
+  num_classes: 2  # 0: non-flood / dry, 1: flood water
+  base_channels: 32
+  dropout: 0.15
+
+dataset:
+  name: "KuroSiwo-Himalayan"
+  root_dir: "./training/datasets/kuro_siwo"
+  patch_size: 512
+  batch_size: 4
+  num_workers: 2
+  val_split: 0.2
+  augmentations:
+    horizontal_flip: 0.5
+    vertical_flip: 0.5
+    random_rotate90: 0.5
+    gaussian_noise: 0.1
+
+training:
+  epochs: 40
+  learning_rate: 1.0e-4
+  min_lr: 1.0e-6
+  weight_decay: 1.0e-4
+  loss:
+    bce_weight: 0.4
+    dice_weight: 0.6
+  optimizer: "AdamW"
+  scheduler: "CosineAnnealingWarmRestarts"
+  gradient_clip: 1.0
+  mixed_precision: true
+
+export:
+  target_format: "onnx"
+  opset_version: 17
+  output_path: "flood_seg_v1.onnx"
+  quantized_output_path: "flood_seg_v1_int8.onnx"
+  quantization_mode: "dynamic_int8"

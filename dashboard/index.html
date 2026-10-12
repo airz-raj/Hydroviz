@@ -344,6 +344,13 @@
 
             <!-- Footer / Attribution -->
             <div class="sidebar-footer">
+                <button id="toggle-logger-btn" class="tool-btn-secondary" style="width: 100%; margin-bottom: 8px; font-size: 11px; padding: 7px 10px; display: flex; align-items: center; justify-content: space-between; border-color: rgba(0, 229, 255, 0.4); background: rgba(0, 229, 255, 0.06); color: #00e5ff; cursor: pointer;">
+                    <span style="display: flex; align-items: center; gap: 6px;">
+                        <span class="logger-led-pulse" style="width: 8px; height: 8px; border-radius: 50%; background: #00e5ff; display: inline-block; box-shadow: 0 0 8px #00e5ff;"></span>
+                        <strong style="font-weight: 600;">System Logs</strong>
+                    </span>
+                    <span id="logger-count-pill" style="background: rgba(0, 229, 255, 0.2); padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; color: #ffffff;">0</span>
+                </button>
                 <button id="sidebar-case-study-btn" class="tool-btn-secondary" style="width: 100%; margin-bottom: 10px; font-size: 11px; padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 6px; border-color: rgba(0, 229, 255, 0.3);">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -619,6 +626,39 @@
                 <div class="modal-footer" style="display: flex; justify-content: flex-end;">
                     <button class="modal-btn primary" id="attribution-modal-ok-btn">Understood &amp; Acknowledged</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Floating Real-Time System & API Activity Console -->
+        <div id="system-logger-window" class="logger-window" style="display: none;">
+            <div class="logger-header">
+                <div class="logger-title-group">
+                    <span class="logger-term-glyph">&gt;_</span>
+                    <span class="logger-title">System &amp; API Activity Console</span>
+                    <span class="logger-streaming-badge"><span class="badge-dot"></span> STREAMING</span>
+                </div>
+                <div class="logger-controls">
+                    <div class="logger-filters" id="logger-filters">
+                        <button class="log-filter-btn active" data-cat="ALL">ALL</button>
+                        <button class="log-filter-btn" data-cat="API">API</button>
+                        <button class="log-filter-btn" data-cat="INGEST">INGEST</button>
+                        <button class="log-filter-btn" data-cat="GEO">GEO</button>
+                        <button class="log-filter-btn" data-cat="ML">ML</button>
+                    </div>
+                    <button id="clear-logger-btn" class="logger-ctrl-btn" title="Clear log window">Clear</button>
+                    <button id="autoscroll-logger-btn" class="logger-ctrl-btn active" title="Toggle Auto-Scroll">Scroll: ON</button>
+                    <button id="close-logger-btn" class="logger-close-btn" title="Close Logger">&times;</button>
+                </div>
+            </div>
+            <div class="logger-search-strip">
+                <input type="text" id="logger-search-input" placeholder="Filter logs by keyword or status (e.g. GET, POST, OSM, 200, Dijkstra, INT8)..." spellcheck="false">
+            </div>
+            <div id="logger-entries" class="logger-entries">
+                <!-- Real-time log entries render here -->
+            </div>
+            <div class="logger-footer">
+                <span id="logger-footer-status">Connected · Polling /system/logs &amp; telemetry feed</span>
+                <span id="logger-footer-counter">0 events</span>
             </div>
         </div>
     </div>

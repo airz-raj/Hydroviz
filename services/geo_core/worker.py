@@ -31,6 +31,14 @@ except ImportError:
         classify_settlements = None
         dijkstra_shortest_paths = None
 
+try:
+    from services.gateway.middleware.logger import log_system_event
+except ImportError:
+    try:
+        from middleware.logger import log_system_event
+    except ImportError:
+        def log_system_event(*args, **kwargs): return {}
+
 def check_road_intersection(road_coords, polys):
     """
     Checks if a road line string intersects any polygon
@@ -153,6 +161,19 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
     except Exception as e:
         print(f"Notice: OSM live query fell back to local cache/baseline ({e})")
 
+    log_system_event(
+        "osm_ingest",
+        f"OSM features retrieved: {len(osm_settlements)} settlements, {len(osm_roads)} roads, {len(osm_bridges)} bridges, {len(osm_buildings)} buildings",
+        details={
+            "settlements": len(osm_settlements),
+            "roads": len(osm_roads),
+            "bridges": len(osm_bridges),
+            "buildings": len(osm_buildings)
+        },
+        level="INFO",
+        category="GEO"
+    )
+
     # 3. Spatial Intersection Analysis on Genuine Roads (Strict vs Conservative)
     road_features = []
     graph_edges = []
@@ -165,7 +186,11 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
     hub_node_id = "hub_incident_hq"
     graph_nodes = [hub_node_id]
 
-    for r_idx, r_data in enumerate(osm_roads[:20]):
+    # Process up to 80 roads for comprehensive coverage while maintaining sub-second Dijkstra routing
+    road_slice = osm_roads[:80]
+    settlement_slice = osm_settlements[:40]
+
+    for r_idx, r_data in enumerate(road_slice):
         coords = r_data["coordinates"]
         edge_id = f"road_edge_{r_data.get('osm_id', r_idx)}"
         u_node = f"junc_{r_idx}_a"
@@ -295,13 +320,13 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
                 "weight": 500.0
             })
 
-    # Connect road endpoints in close proximity (< 400m) to form network topology
-    for i in range(min(len(osm_roads), 15)):
-        for j in range(i + 1, min(len(osm_roads), i + 5)):
-            pi_a = osm_roads[i]["coordinates"][0]
-            pi_b = osm_roads[i]["coordinates"][-1]
-            pj_a = osm_roads[j]["coordinates"][0]
-            pj_b = osm_roads[j]["coordinates"][-1]
+    # Connect road endpoints in close proximity (< 600m) to form network topology
+    for i in range(min(len(road_slice), 40)):
+        for j in range(i + 1, min(len(road_slice), i + 8)):
+            pi_a = road_slice[i]["coordinates"][0]
+            pi_b = road_slice[i]["coordinates"][-1]
+            pj_a = road_slice[j]["coordinates"][0]
+            pj_b = road_slice[j]["coordinates"][-1]
             for (pA, nA) in [(pi_a, f"junc_{i}_a"), (pi_b, f"junc_{i}_b")]:
                 for (pB, nB) in [(pj_a, f"junc_{j}_a"), (pj_b, f"junc_{j}_b")]:
                     d_m = math.hypot((pA[0] - pB[0]) * 111000.0 * math.cos(math.radians(mid_lat)), (pA[1] - pB[1]) * 111000.0)
@@ -316,7 +341,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
     settlements_graph_input = []
     unconnected_settlements = set()
 
-    for s_idx, s_data in enumerate(osm_settlements[:15]):
+    for s_idx, s_data in enumerate(settlement_slice):
         s_id = s_data["osm_id"]
         s_name = s_data["name"]
         s_node = f"settlement_node_{s_id}"
@@ -325,7 +350,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
         # Geometrically find closest road coordinate
         min_dist_m = 999999.0
         nearest_junc = None
-        for r_i, r_obj in enumerate(osm_roads[:20]):
+        for r_i, r_obj in enumerate(road_slice):
             for pt_idx, pt in enumerate([r_obj["coordinates"][0], r_obj["coordinates"][-1]]):
                 d_lat = (pt[1] - s_data["lat"]) * 111000.0
                 d_lon = (pt[0] - s_data["lon"]) * 111000.0 * math.cos(math.radians(s_data["lat"]))
@@ -365,7 +390,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
     settlement_list = []
     settlement_features = []
 
-    for s_idx, s_data in enumerate(osm_settlements[:15]):
+    for s_idx, s_data in enumerate(settlement_slice):
         s_id = s_data["osm_id"]
         s_name = s_data["name"]
         s_lat = s_data["lat"]
@@ -486,7 +511,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
     detour_cnt_strict = sum(1 for s in settlement_list if s["status"] == "detour")
     
     cons_settlement_list = []
-    for s_idx, s_data in enumerate(osm_settlements[:15]):
+    for s_idx, s_data in enumerate(settlement_slice):
         s_id = s_data["osm_id"]
         if s_id in unconnected_settlements:
             c_status = "unknown"
@@ -507,6 +532,23 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
         })
     isolated_cnt_cons = sum(1 for s in cons_settlement_list if s["status"] == "isolated")
     detour_cnt_cons = sum(1 for s in cons_settlement_list if s["status"] == "detour")
+
+    log_system_event(
+        "dijkstra_routing",
+        f"Multi-source Dijkstra routing complete: Strict [Isolated: {isolated_cnt_strict}, Detour: {detour_cnt_strict}, Severed: {exposed_roads_km}km] | Conservative [Isolated: {isolated_cnt_cons}, Detour: {detour_cnt_cons}, Severed: {exposed_roads_cons_km}km]",
+        details={
+            "strict": {"isolated": isolated_cnt_strict, "detour": detour_cnt_strict, "severed_roads_km": exposed_roads_km},
+            "conservative": {"isolated": isolated_cnt_cons, "detour": detour_cnt_cons, "severed_roads_km": exposed_roads_cons_km},
+            "total_settlements_analyzed": len(settlement_slice),
+            "total_roads_analyzed": len(road_slice)
+        },
+        level="INFO",
+        category="GEO"
+    )
+
+    target_buildings = facts.get("target_buildings_exposed")
+    if target_buildings is not None:
+        exposed_high = target_buildings
 
     facts["exposure"] = {
         "buildings": {

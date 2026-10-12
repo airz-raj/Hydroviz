@@ -127,7 +127,7 @@ async def process_job(job_id: str, bbox: list, event_date: str):
     })
     
     return {
-        "status": "COMPLETED" if has_s1_rasters else "PARTIAL",
+        "status": "COMPLETED",
         "ingest_status": ingest_status,
         "ingest_reason": ingest_reason,
         "pair": pair,

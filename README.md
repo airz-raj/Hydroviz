@@ -174,10 +174,10 @@ hydroviz/
 
 | Document | Purpose |
 |----------|---------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System design, service topology, database schema, data flow |
-| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | Procedural build guide with acceptance criteria per milestone |
-| [DECISIONS.md](DECISIONS.md) | All technical decisions, deviations, and open questions |
-| [AGENT_BRIEF.md](AGENT_BRIEF.md) | Original engineering specification |
+| [docs/report.md](docs/report.md) | Comprehensive 6-page technical validation report |
+| [docs/demo_script.md](docs/demo_script.md) | 3-minute demonstration script & narrator protocol |
+| [CHANGELOG.md](CHANGELOG.md) | Complete chronological ledger of all platform updates |
+| [Track B.pdf](Track%20B.pdf) | Official hackathon challenge specifications |
 
 ---
 
