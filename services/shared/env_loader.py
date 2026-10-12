@@ -28,8 +28,8 @@ def load_env(env_path: str = None) -> None:
                     k = k.strip()
                     v = v.strip().strip("'\"")
                     curr = os.environ.get(k, "")
-                    # Load if missing, empty, or currently set to placeholder string
-                    if k and (not curr or "your_client_id_here" in curr or "your_client_secret_here" in curr or curr == "your_postgres_password_here"):
+                    # Load only if not yet set in os.environ, or currently set to placeholder string
+                    if k and (k not in os.environ or "your_client_id_here" in curr or "your_client_secret_here" in curr or curr == "your_postgres_password_here"):
                         os.environ[k] = v
     except Exception:
         pass

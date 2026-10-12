@@ -4,6 +4,13 @@ All notable changes to the HydroViz project will be documented in this file.
 
 ## [2026-10-12]
 
+- **feat(fluid-polygons-palette-and-real-d8-flow-routing):**
+  - **Dynamic Preset Deselection:** Preset chips automatically deselect when custom coordinates are entered, maintaining clear visual state.
+  - **Fluid Flood Extents:** Replaced rigid box footprints with organic, valley-contouring corridors using moving-average thalweg tracking and Chaikin subdivision smoothing.
+  - **Classic Royal Azure Theme:** Eradicated harsh neon cyan (`#00e5ff`) in favor of classic sapphire azure (`#3b82f6` / `#2563eb`), soft translucent water styling (`fillOpacity: 0.28`), and earthy amber debris scour.
+  - **Authentic Multi-Tier DEM Flow Routing:** Fixed static routing results by integrating live Copernicus 30m/90m DEM querying with bilinear interpolation and an authentic physiographic offline baseline model (`get_himalayan_baseline_elev`).
+  - **High-Contrast Flow Vector & Map UX:** Added auto-clearing of prior trace markers on click, dual-stroke high-contrast flow vectors (`#0f172a` casing + `#38bdf8` core), green terminus outflow marker, and terrain slope gradient metrics.
+
 - **feat(explainer-modal-and-ui-enhancements):**
   - Integrated an interactive **Analysis Findings & Map Interpretation Guide Modal** (`#explainer-modal`), automatically presented upon completion of every scan to clearly explain every visual element on the OSM map: Cyan Flood Extent (`#00e5ff`), Amber Debris Scour Field (`#f59e0b`), Yellow Dashed Severed Roads (`#ffd600`), Green Solid Passable Roads (`#52b788`), Pulsing Red Isolated Hamlets (`#ff3366`), Pulsing Orange Highland Detour Hamlets (`#ff9100`), Red Exposed Building Dots (`#ff3366`), and Cyan D8 Downhill Runoff Vectors (`#00e5ff`).
   - Added **"🗺️ Map Guide"** launch pills in the Telemetry HUD header and sidebar symbology panel, allowing users to reopen the guide at any time.

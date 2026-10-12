@@ -157,6 +157,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return "Kathmandu Valley Metropolitan Basin";
         } else if (cLng >= 85.05 && cLng <= 85.30 && cLat >= 27.80 && cLat <= 28.05) {
             return "Trishuli River Basin Corridor";
+        } else if (cLng >= 84.70 && cLng <= 85.05 && cLat >= 28.20 && cLat <= 28.65) {
+            return "Budhi Gandaki & Manaslu Valley Corridor";
+        } else if (cLng >= 84.20 && cLng <= 84.70 && cLat >= 28.00 && cLat <= 28.70) {
+            return "Marsyangdi River Basin & Lamjung Corridor";
         } else if (cLng >= 83.5 && cLng <= 84.5 && cLat >= 27.9 && cLat <= 28.6) {
             return "Seti River Basin & Pokhara Valley";
         } else {
@@ -167,6 +171,52 @@ document.addEventListener('DOMContentLoaded', () => {
     const bboxInputEl = document.getElementById('bbox-input');
     const aoiHintEl = document.getElementById('aoi-hint');
     const modalReportTitle = document.getElementById('modal-report-title');
+
+    const presetChips = document.querySelectorAll('.preset-chip');
+
+    function syncPresetChips(currentBboxStr) {
+        if (!currentBboxStr) {
+            presetChips.forEach(c => c.classList.remove('active'));
+            return;
+        }
+        const raw = currentBboxStr.replace(/[\[\]\(\)]/g, '');
+        const p = raw.split(/[\s,]+/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+        if (p.length !== 4) {
+            presetChips.forEach(c => c.classList.remove('active'));
+            return;
+        }
+        let [c1, c2, c3, c4] = p;
+        let minX, maxX, minY, maxY;
+        if ((c1 >= 15 && c1 <= 40 && c2 >= 60 && c2 <= 105) || (Math.abs(c1) < 45 && Math.abs(c2) > 60)) {
+            minX = Math.min(c2, c4); maxX = Math.max(c2, c4);
+            minY = Math.min(c1, c3); maxY = Math.max(c1, c3);
+        } else {
+            minX = Math.min(c1, c3); maxX = Math.max(c1, c3);
+            minY = Math.min(c2, c4); maxY = Math.max(c2, c4);
+        }
+
+        let matched = false;
+        presetChips.forEach(chip => {
+            const cp = chip.dataset.bbox.split(/[\s,]+/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+            if (cp.length === 4) {
+                const isClose = Math.abs(minX - cp[0]) <= 0.05 &&
+                                Math.abs(minY - cp[1]) <= 0.05 &&
+                                Math.abs(maxX - cp[2]) <= 0.05 &&
+                                Math.abs(maxY - cp[3]) <= 0.05;
+                if (isClose) {
+                    chip.classList.add('active');
+                    matched = true;
+                } else {
+                    chip.classList.remove('active');
+                }
+            } else {
+                chip.classList.remove('active');
+            }
+        });
+        if (!matched) {
+            presetChips.forEach(c => c.classList.remove('active'));
+        }
+    }
 
     function updateAoiHint() {
         if (!bboxInputEl) return;
@@ -186,6 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (aoiHintEl) aoiHintEl.innerText = region;
             if (modalReportTitle) modalReportTitle.innerText = `${region} Flood Impact Assessment`;
         }
+        syncPresetChips(bboxInputEl.value);
     }
 
     if (bboxInputEl) {
@@ -196,7 +247,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Quick AOI Presets Handling
-    const presetChips = document.querySelectorAll('.preset-chip');
     presetChips.forEach(chip => {
         chip.addEventListener('click', () => {
             presetChips.forEach(c => c.classList.remove('active'));
@@ -222,11 +272,34 @@ document.addEventListener('DOMContentLoaded', () => {
         gatewayStatusEl.innerText = `Gateway Online: ${window.location.host || 'localhost:8000'}`;
     }
 
+    let bannerDismissTimer = null;
+
+    function dismissModeBanner() {
+        if (!modeBanner) return;
+        modeBanner.style.opacity = '0';
+        setTimeout(() => {
+            if (modeBanner.style.opacity === '0') {
+                modeBanner.style.display = 'none';
+            }
+        }, 360);
+    }
+
+    const modeBannerCloseBtn = document.getElementById('mode-banner-close');
+    if (modeBannerCloseBtn) {
+        modeBannerCloseBtn.addEventListener('click', dismissModeBanner);
+    }
+
     // Floating Mode Banner Display Controller
     function updateModeBanner(mode, facts, errorMsg = null) {
         if (!modeBanner) return;
 
+        if (bannerDismissTimer) {
+            clearTimeout(bannerDismissTimer);
+            bannerDismissTimer = null;
+        }
+
         modeBanner.className = 'mode-banner';
+        modeBanner.style.opacity = '1';
         if (modeRetryBtn) modeRetryBtn.style.display = 'none';
 
         if (mode === 'failed') {
@@ -238,14 +311,28 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (mode === 'partial') {
             modeBanner.classList.add('partial');
             modeBannerBadge.innerText = 'PARTIAL RESULT';
-            modeBannerTitle.innerText = 'Satellite Scene Unavailable';
+            modeBannerTitle.innerText = facts?.mode_label || 'Satellite Scene Unavailable';
             modeBannerDesc.innerText = facts?.mode_description || 'No matching Sentinel-1 repeat pass found for this time window. Pre-event OpenStreetMap infrastructure has been mapped.';
             if (modeRetryBtn) modeRetryBtn.style.display = 'inline-block';
+            bannerDismissTimer = setTimeout(dismissModeBanner, 3500);
+        } else if (mode === 'reference_case') {
+            modeBanner.classList.add('reference');
+            modeBannerBadge.innerText = 'REFERENCE CASE';
+            modeBannerTitle.innerText = facts?.mode_label || 'Curated Reference Case';
+            modeBannerDesc.innerText = facts?.mode_description || 'Curated Copernicus Sentinel-1 reference case validated against Copernicus EMS EMSR927.';
+            bannerDismissTimer = setTimeout(dismissModeBanner, 3000);
+        } else if (mode === 'demo_simulated') {
+            modeBanner.classList.add('partial');
+            modeBannerBadge.innerText = 'TERRAIN SIMULATION';
+            modeBannerTitle.innerText = facts?.mode_label || 'Topographic Simulation Mode';
+            modeBannerDesc.innerText = facts?.mode_description || 'Physics-conditioned demonstration simulation using Copernicus DEM HAND (<15m) and slope (<20°).';
+            bannerDismissTimer = setTimeout(dismissModeBanner, 3000);
         } else {
             modeBanner.classList.add('live');
             modeBannerBadge.innerText = 'LIVE ANALYSIS COMPLETE';
-            modeBannerTitle.innerText = 'Dynamic Sentinel-1 Retrieval & SAR Delineation';
+            modeBannerTitle.innerText = facts?.mode_label || 'Dynamic Sentinel-1 Retrieval & SAR Delineation';
             modeBannerDesc.innerText = facts?.mode_description || 'All processing stages completed dynamically with Copernicus satellite observations and elevation data.';
+            bannerDismissTimer = setTimeout(dismissModeBanner, 3000);
         }
 
         modeBanner.style.display = 'flex';
@@ -266,7 +353,14 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             console.log("Initialize Scan triggered!");
             const bboxInput = document.getElementById('bbox-input').value;
-            const eventDate = document.getElementById('date-input').value;
+            let eventDate = document.getElementById('date-input')?.value || "2026-08-26";
+            eventDate = eventDate.trim();
+            if (eventDate.includes('/')) {
+                const dp = eventDate.split('/');
+                if (dp.length === 3 && dp[2].length === 4) {
+                    eventDate = `${dp[2]}-${dp[1].padStart(2, '0')}-${dp[0].padStart(2, '0')}`;
+                }
+            }
             const slopeThreshold = parseFloat(document.getElementById('slope-input')?.value || 20);
             const handThreshold = parseFloat(document.getElementById('hand-input')?.value || 15);
             
@@ -354,11 +448,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnText.innerText = "Scanning Satellite AOI...";
             }
 
-            // Poll Job Status until complete
+            // Poll Job Status until complete (up to 120s for real SAR data acquisition)
             let pollAttempts = 0;
-            while (!isComplete && pollAttempts < 60) {
+            const maxPollAttempts = 160;
+            while (!isComplete && pollAttempts < maxPollAttempts) {
                 pollAttempts++;
-                await new Promise(r => setTimeout(r, 400));
+                await new Promise(r => setTimeout(r, 600));
 
                 try {
                     const statusRes = await fetch(`/jobs/${currentJobId}/status`);
@@ -403,6 +498,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (pollErr) {
                     console.warn("Poll status notice:", pollErr);
                 }
+            }
+
+            if (!isComplete) {
+                throw new Error("Analysis job timed out while processing large satellite acquisition.");
             }
 
             // Fetch live facts
@@ -457,6 +556,57 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Smooth polygon coordinates with Chaikin's corner-cutting algorithm
+    // to give water and debris polygons organic, fluid, natural boundaries
+    function smoothRingChaikin(ring, iterations = 2) {
+        if (!ring || ring.length < 4) return ring;
+        let pts = ring.slice(0, ring.length - 1);
+        for (let it = 0; it < iterations; it++) {
+            const next = [];
+            const n = pts.length;
+            for (let i = 0; i < n; i++) {
+                const p0 = pts[i];
+                const p1 = pts[(i + 1) % n];
+                next.push([
+                    0.75 * p0[0] + 0.25 * p1[0],
+                    0.75 * p0[1] + 0.25 * p1[1]
+                ]);
+                next.push([
+                    0.25 * p0[0] + 0.75 * p1[0],
+                    0.25 * p0[1] + 0.75 * p1[1]
+                ]);
+            }
+            pts = next;
+        }
+        pts.push([pts[0][0], pts[0][1]]);
+        return pts;
+    }
+
+    function smoothFeatureGeometry(feature) {
+        if (!feature || !feature.geometry) return feature;
+        const geom = feature.geometry;
+        if (geom.type === 'Polygon' && geom.coordinates) {
+            const smoothedRings = geom.coordinates.map(r => smoothRingChaikin(r, 2));
+            return {
+                ...feature,
+                geometry: {
+                    ...geom,
+                    coordinates: smoothedRings
+                }
+            };
+        } else if (geom.type === 'MultiPolygon' && geom.coordinates) {
+            const smoothedPolys = geom.coordinates.map(poly => poly.map(r => smoothRingChaikin(r, 2)));
+            return {
+                ...feature,
+                geometry: {
+                    ...geom,
+                    coordinates: smoothedPolys
+                }
+            };
+        }
+        return feature;
+    }
+
     // 5. Render Dynamic Job Results & GeoJSON Layers
     function renderJobResults(facts, minLng, minLat, maxLng, maxLat) {
         // Update Live HUD numbers directly from facts
@@ -474,21 +624,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const layers = facts.layers || {};
 
-        // A. Flood Inundation Layer
+        // A. Flood Inundation Layer (Fluid Curvilinear Meandering)
         if (layers.flood && layers.flood.features) {
             layers.flood.features.forEach((feature) => {
-                const polygon = L.geoJSON(feature, {
+                const smoothedFeature = smoothFeatureGeometry(feature);
+                const polygon = L.geoJSON(smoothedFeature, {
                     style: {
-                        color: '#00e5ff',
-                        weight: 2,
-                        opacity: 0.9,
-                        fillColor: '#00e5ff',
-                        fillOpacity: 0.45
+                        color: '#2563eb',          // Classic deep royal/sapphire blue
+                        weight: 1.5,
+                        opacity: 0.75,
+                        fillColor: '#3b82f6',      // Fluid alpine river blue
+                        fillOpacity: 0.28,         // Soft translucent water blending with terrain
+                        lineJoin: 'round',
+                        lineCap: 'round'
                     }
                 });
 
                 polygon.bindPopup(`
-                    <div class="custom-popup-title" style="color: #00e5ff;">🌊 SAR Inundated Floodwater</div>
+                    <div class="custom-popup-title" style="color: #2563eb;">🌊 SAR Inundated Floodwater</div>
                     <div class="custom-popup-body">
                         <strong>Model Inference:</strong> ${facts.flood?.model || 'Dual-Pol S1 Change Delineation'}<br>
                         <strong>Detected Flood Area:</strong> ${floodArea} km²<br>
@@ -503,20 +656,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // B. Debris & Scour Field
         if (layers.debris && layers.debris.features) {
             layers.debris.features.forEach((feature, idx) => {
-                const polygon = L.geoJSON(feature, {
+                const smoothedFeature = smoothFeatureGeometry(feature);
+                const polygon = L.geoJSON(smoothedFeature, {
                     style: {
-                        color: '#f59e0b',
-                        weight: 1.5,
-                        opacity: 0.85,
-                        dashArray: '5, 5',
-                        fillColor: '#f59e0b',
-                        fillOpacity: 0.35
+                        color: '#d97706',          // Earthy sediment amber
+                        weight: 1.4,
+                        opacity: 0.8,
+                        dashArray: '4, 4',
+                        fillColor: '#d97706',
+                        fillOpacity: 0.22,
+                        lineJoin: 'round'
                     }
                 });
 
                 const props = feature.properties || {};
                 polygon.bindPopup(`
-                    <div class="custom-popup-title" style="color: #f59e0b;">🪨 ${props.name || 'Debris & Scour Field'} [Zone ${idx + 1}]</div>
+                    <div class="custom-popup-title" style="color: #d97706;">🪨 ${props.name || 'Debris & Scour Field'} [Zone ${idx + 1}]</div>
                     <div class="custom-popup-body">
                         <strong>Hazard Classification:</strong> ${props.hazard_type || 'Heuristic Disturbed Ground'}<br>
                         <strong>Slope / Flank:</strong> ${props.slope || '12° - 25° Channel Flank'}<br>
@@ -707,13 +862,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         traceBtnLabel.innerText = "Tracing Flow Vector...";
 
+        // Clear prior traces on new click so old markers do not clutter the map
+        traceLayerGroup.clearLayers();
+
         // Provide instant visual feedback at click point while calculating
         const tempPulseMarker = L.circleMarker([lat, lng], {
-            radius: 8,
-            color: '#00e5ff',
-            fillColor: '#00e5ff',
-            fillOpacity: 0.8,
-            weight: 3
+            radius: 7,
+            color: '#ffffff',
+            fillColor: '#2563eb',
+            fillOpacity: 0.85,
+            weight: 2
         }).addTo(traceLayerGroup);
         tempPulseMarker.bindTooltip("💧 Simulating D8 downhill runoff path...", { permanent: true, direction: "top" }).openTooltip();
 
@@ -743,31 +901,57 @@ document.addEventListener('DOMContentLoaded', () => {
             const pathFeature = traceData.path;
             const props = pathFeature.properties || {};
 
-            // Render flow line
-            const flowLine = L.geoJSON(pathFeature, {
+            // Render prominent dual-stroke flow line with high contrast on satellite basemap
+            const flowLineCasing = L.geoJSON(pathFeature, {
                 style: {
-                    color: '#00e5ff',
-                    weight: 4,
-                    opacity: 0.95,
-                    dashArray: '4, 8'
+                    color: '#0f172a',
+                    weight: 6.5,
+                    opacity: 0.85,
+                    lineCap: 'round',
+                    lineJoin: 'round'
                 }
             });
 
-            // Start Marker
+            const flowLine = L.geoJSON(pathFeature, {
+                style: {
+                    color: '#38bdf8',
+                    weight: 3.5,
+                    opacity: 1.0,
+                    dashArray: '6, 6',
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                }
+            });
+
+            // Start Marker (Origin)
             const startCircle = L.circleMarker([origin[1], origin[0]], {
                 radius: 7,
                 color: '#ffffff',
-                fillColor: '#00e5ff',
+                fillColor: '#2563eb',
                 fillOpacity: 1,
-                weight: 2
+                weight: 2.5
             });
+
+            // Outflow Terminus Marker (Downstream End)
+            let endCircle = null;
+            const pathCoords = (pathFeature.geometry && pathFeature.geometry.coordinates) || [];
+            if (pathCoords.length > 1) {
+                const lastPt = pathCoords[pathCoords.length - 1];
+                endCircle = L.circleMarker([lastPt[1], lastPt[0]], {
+                    radius: 6,
+                    color: '#ffffff',
+                    fillColor: '#10b981',
+                    fillOpacity: 1,
+                    weight: 2
+                }).bindTooltip(`🌊 Outflow Terminus: ${props.end_elevation_m != null ? props.end_elevation_m + 'm' : ''}`, { direction: 'bottom' });
+            }
 
             const settlementsList = props.settlements_along_path || traceData.settlements_along_path || [];
             let settlementsHtml = '';
             if (settlementsList.length > 0) {
                 settlementsHtml = `
                     <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.15);">
-                        <strong style="color: #00e5ff;">🏘️ Settlements Along Path (${settlementsList.length}):</strong>
+                        <strong style="color: #38bdf8;">🏘️ Settlements Along Path (${settlementsList.length}):</strong>
                         <ul style="margin: 4px 0 0 0; padding-left: 16px; font-size: 11px; line-height: 1.4; color: #cbd5e1;">
                             ${settlementsList.map(s => `<li><strong>${s.name}</strong> (${s.place}) — ${s.distance_downstream_km} km downstream</li>`).join('')}
                         </ul>
@@ -775,21 +959,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             }
 
-            startCircle.bindPopup(`
-                <div class="custom-popup-title" style="color: #00e5ff;">💧 D8 Downhill Flow Path</div>
-                <div class="custom-popup-body">
-                    <strong>Source Coordinates:</strong> ${origin[1].toFixed(5)}, ${origin[0].toFixed(5)}<br>
-                    <strong>Start Elevation:</strong> ${props.start_elevation_m != null ? props.start_elevation_m + 'm' : '--'}<br>
-                    <strong>Terminal Elevation:</strong> ${props.end_elevation_m != null ? props.end_elevation_m + 'm' : '--'}<br>
-                    <strong>Total Vertical Drop:</strong> ${props.drop_m != null ? props.drop_m + 'm' : '--'}<br>
-                    <strong>Downstream Distance:</strong> ${props.distance_km != null ? props.distance_km + ' km' : '--'}<br>
-                    <strong>Routing:</strong> D8 Steepest Descent on Copernicus 30m DEM<br>
-                    ${settlementsHtml}
-                    <span style="font-size: 10px; color: #94a3b8; display: block; margin-top: 6px;">Notice: Bare-earth terrain runoff model, not proof of historical debris flood extent.</span>
+            const popupHtml = `
+                <div class="custom-popup-title" style="color: #2563eb; display: flex; align-items: center; gap: 6px;">
+                    <span>💧</span>
+                    <span>D8 Downhill Flow Path</span>
                 </div>
-            `);
+                <div class="custom-popup-body" style="font-size: 12px; line-height: 1.55;">
+                    <div style="display: grid; grid-template-columns: auto auto; gap: 4px 12px; margin-bottom: 6px;">
+                        <span style="color: #94a3b8;">Source:</span>
+                        <strong style="color: #f1f5f9;">${origin[1].toFixed(5)}, ${origin[0].toFixed(5)}</strong>
+                        <span style="color: #94a3b8;">Start Elevation:</span>
+                        <strong style="color: #38bdf8;">${props.start_elevation_m != null ? props.start_elevation_m + 'm' : '--'}</strong>
+                        <span style="color: #94a3b8;">Terminal Elevation:</span>
+                        <strong style="color: #10b981;">${props.end_elevation_m != null ? props.end_elevation_m + 'm' : '--'}</strong>
+                        <span style="color: #94a3b8;">Total Vertical Drop:</span>
+                        <strong style="color: #f59e0b;">${props.drop_m != null ? props.drop_m + 'm' : '--'}</strong>
+                        <span style="color: #94a3b8;">Downstream Distance:</span>
+                        <strong style="color: #f1f5f9;">${props.distance_km != null ? props.distance_km + ' km' : '--'}</strong>
+                        ${props.slope_percent != null ? `<span style="color: #94a3b8;">Average Slope:</span><strong style="color: #f1f5f9;">${props.slope_percent}%</strong>` : ''}
+                    </div>
+                    <div style="font-size: 11px; color: #94a3b8; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 5px;">
+                        <strong>DEM Source:</strong> Copernicus WorldDEM-30 (D8 Steepest Descent)
+                    </div>
+                    ${settlementsHtml}
+                    <span style="font-size: 10px; color: #64748b; display: block; margin-top: 6px;">Notice: Bare-earth terrain runoff model, not proof of historical debris flood extent.</span>
+                </div>
+            `;
 
+            startCircle.bindPopup(popupHtml);
+            if (endCircle) endCircle.bindPopup(popupHtml);
+            flowLine.bindPopup(popupHtml);
+            flowLineCasing.bindPopup(popupHtml);
+
+            traceLayerGroup.addLayer(flowLineCasing);
             traceLayerGroup.addLayer(flowLine);
+            if (endCircle) traceLayerGroup.addLayer(endCircle);
             traceLayerGroup.addLayer(startCircle);
             startCircle.openPopup();
 

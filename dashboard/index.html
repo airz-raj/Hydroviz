@@ -22,11 +22,11 @@
                     <div class="logo-icon">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" fill="url(#cyan-grad)" stroke="none"/>
-                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" stroke="#00e5ff" stroke-width="1.5"/>
+                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" stroke="#3b82f6" stroke-width="1.5"/>
                             <defs>
                                 <linearGradient id="cyan-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                    <stop offset="0%" stop-color="#00e5ff" />
-                                    <stop offset="100%" stop-color="#0072ff" />
+                                    <stop offset="0%" stop-color="#3b82f6" />
+                                    <stop offset="100%" stop-color="#1d4ed8" />
                                 </linearGradient>
                             </defs>
                         </svg>
@@ -164,7 +164,7 @@
             <div class="panel" id="flow-trace-panel">
                 <div class="panel-header">
                     <div class="panel-title">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
                             <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                         </svg>
                         <h3>Downhill Flow Routing (D8)</h3>
@@ -260,12 +260,12 @@
                     </div>
                     <span class="collapse-icon" id="legend-collapse-icon">▾</span>
                 </div>
-                <button type="button" id="open-explainer-btn" class="tool-btn-secondary" style="width: 100%; margin-bottom: 10px; font-size: 11.5px; padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 6px; border-color: rgba(0, 229, 255, 0.4); color: #00e5ff; cursor: pointer;">
+                <button type="button" id="open-explainer-btn" class="tool-btn-secondary" style="width: 100%; margin-bottom: 10px; font-size: 11.5px; padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 6px; border-color: rgba(59, 130, 246, 0.4); color: #93c5fd; cursor: pointer;">
                     <span>🗺️ Map Symbology &amp; Findings Guide</span>
                 </button>
                 <div class="legend-content" id="legend-content">
                     <div class="legend-item">
-                        <span class="legend-swatch polygon-swatch" style="background: rgba(0, 229, 255, 0.45); border: 1.5px solid #00e5ff;"></span>
+                        <span class="legend-swatch polygon-swatch" style="background: rgba(59, 130, 246, 0.28); border: 1.5px solid #2563eb;"></span>
                         <div class="legend-text">
                             <div class="legend-label">Detected Flood Extent</div>
                             <div class="legend-sub">Model-estimated &amp; SAR-detected water (Sentinel-1)</div>
@@ -314,7 +314,7 @@
                         </div>
                     </div>
                     <div class="legend-item">
-                        <span class="legend-swatch line-swatch" style="border-top: 3.5px dashed #00e5ff;"></span>
+                        <span class="legend-swatch line-swatch" style="border-top: 3.5px dashed #2563eb;"></span>
                         <div class="legend-text">
                             <div class="legend-label">D8 Downhill Flow Vector</div>
                             <div class="legend-sub">Steepest descent gravity runoff on 30m DEM</div>
@@ -327,7 +327,7 @@
             <div class="panel" id="report-panel" style="display: none;">
                 <div class="panel-header">
                     <div class="panel-title">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                             <polyline points="14 2 14 8 20 8"></polyline>
                             <line x1="16" y1="13" x2="8" y2="13"></line>
@@ -347,15 +347,15 @@
 
             <!-- Footer / Attribution -->
             <div class="sidebar-footer">
-                <button id="toggle-logger-btn" class="tool-btn-secondary" style="width: 100%; margin-bottom: 8px; font-size: 11px; padding: 7px 10px; display: flex; align-items: center; justify-content: space-between; border-color: rgba(0, 229, 255, 0.4); background: rgba(0, 229, 255, 0.06); color: #00e5ff; cursor: pointer;">
+                <button id="toggle-logger-btn" class="tool-btn-secondary" style="width: 100%; margin-bottom: 8px; font-size: 11px; padding: 7px 10px; display: flex; align-items: center; justify-content: space-between; border-color: rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.06); color: #93c5fd; cursor: pointer;">
                     <span style="display: flex; align-items: center; gap: 6px;">
-                        <span class="logger-led-pulse" style="width: 8px; height: 8px; border-radius: 50%; background: #00e5ff; display: inline-block; box-shadow: 0 0 8px #00e5ff;"></span>
+                        <span class="logger-led-pulse" style="width: 8px; height: 8px; border-radius: 50%; background: #3b82f6; display: inline-block; box-shadow: 0 0 8px #3b82f6;"></span>
                         <strong style="font-weight: 600;">System Logs</strong>
                     </span>
-                    <span id="logger-count-pill" style="background: rgba(0, 229, 255, 0.2); padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; color: #ffffff;">0</span>
+                    <span id="logger-count-pill" style="background: rgba(59, 130, 246, 0.2); padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; color: #ffffff;">0</span>
                 </button>
-                <button id="sidebar-case-study-btn" class="tool-btn-secondary" style="width: 100%; margin-bottom: 10px; font-size: 11px; padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 6px; border-color: rgba(0, 229, 255, 0.3);">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
+                <button id="sidebar-case-study-btn" class="tool-btn-secondary" style="width: 100%; margin-bottom: 10px; font-size: 11px; padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 6px; border-color: rgba(59, 130, 246, 0.3);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                         <polyline points="14 2 14 8 20 8"></polyline>
                         <line x1="16" y1="13" x2="8" y2="13"></line>
@@ -388,6 +388,7 @@
                     <div class="mode-banner-desc" id="mode-banner-desc">Authentic SAR flood delineation &amp; OSM infrastructure from 26 Aug 2026 Himalayan disaster.</div>
                 </div>
                 <button type="button" id="mode-retry-btn" class="mode-retry-btn" style="display: none;">Retry Scan</button>
+                <button type="button" id="mode-banner-close" class="mode-banner-close" aria-label="Close message" title="Dismiss notification">✕</button>
             </div>
 
             <!-- Top Right Telemetry HUD (Appears after analysis) -->
@@ -439,8 +440,8 @@
                     <button class="modal-close" id="d8-modal-close-btn">&times;</button>
                 </div>
                 <div class="modal-body" style="padding: 24px; font-size: 13px; color: #cbd5e1; line-height: 1.6; max-height: 520px; overflow-y: auto;">
-                    <div style="background: rgba(0, 229, 255, 0.06); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 6px; padding: 14px 16px; margin-bottom: 20px;">
-                        <h4 style="color: #00e5ff; margin: 0 0 8px 0; font-size: 14px;">What is the D8 Algorithm?</h4>
+                    <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 6px; padding: 14px 16px; margin-bottom: 20px;">
+                        <h4 style="color: #3b82f6; margin: 0 0 8px 0; font-size: 14px;">What is the D8 Algorithm?</h4>
                         <p style="margin: 0; color: #94a3b8; font-size: 12.5px; line-height: 1.5;">
                             The <strong>Deterministic Eight-Node (D8)</strong> algorithm routes surface water drainage from each elevation cell to its steepest down-slope neighbor among the 8 adjacent grid cells. In HydroViz, it traces gravity drainage vectors across the Copernicus WorldDEM-30 terrain grid.
                         </p>
@@ -455,7 +456,7 @@
                         </p>
                     </div>
 
-                    <h4 style="color: #00e5ff; margin: 0 0 8px 0; font-size: 13.5px;">Himalayan Terrain Parameters</h4>
+                    <h4 style="color: #3b82f6; margin: 0 0 8px 0; font-size: 13.5px;">Himalayan Terrain Parameters</h4>
                     <ul style="padding-left: 20px; margin: 0 0 20px 0; font-size: 12.5px;">
                         <li style="margin-bottom: 8px;"><strong>Slope Cutoff (Default 20°):</strong> Steep Himalayan walls create extreme radar shadow and layover in Sentinel-1 SAR imagery. Slopes exceeding this cutoff are masked out to eliminate false standing-water detections on cliffs.</li>
                         <li style="margin-bottom: 8px;"><strong>HAND Buffer (Default 15m):</strong> <em>Height Above Nearest Drainage</em> measures vertical elevation above the riverbed. Flood detection is constrained to low-lying riparian terraces, preventing false alarms on high ridges.</li>
@@ -518,7 +519,7 @@
                 </div>
                 <div class="modal-body" id="case-study-content" style="padding: 24px; max-height: 520px; overflow-y: auto;">
                     <div class="case-study-overview" style="margin-bottom: 20px; font-size: 13px; color: #94a3b8; line-height: 1.6;">
-                        This benchmark compares HydroViz's automated multimodal pipeline against the Copernicus Emergency Management Service (EMS) activation <strong style="color: #00e5ff;">EMSR927</strong> for the 26 August 2026 flood event. Per Section 2 &amp; 8 rules, EMSR927 data was strictly isolated as check-only and never fed into pipeline tuning or model training.
+                        This benchmark compares HydroViz's automated multimodal pipeline against the Copernicus Emergency Management Service (EMS) activation <strong style="color: #3b82f6;">EMSR927</strong> for the 26 August 2026 flood event. Per Section 2 &amp; 8 rules, EMSR927 data was strictly isolated as check-only and never fed into pipeline tuning or model training.
                     </div>
                     
                     <h3 style="font-size: 14px; color: #f8fafc; margin-bottom: 10px;">Agreement &amp; Detection Metrics</h3>
@@ -533,7 +534,7 @@
                         <tbody style="color: #94a3b8;">
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                                 <td style="padding: 8px 6px;">Intersection over Union (IoU)</td>
-                                <td style="padding: 8px 6px; color: #00e5ff; font-weight: 600;">0.74</td>
+                                <td style="padding: 8px 6px; color: #3b82f6; font-weight: 600;">0.74</td>
                                 <td style="padding: 8px 6px;">SAR vs Optical EMS Delineation</td>
                             </tr>
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
@@ -616,20 +617,20 @@
                         </p>
                     </div>
 
-                    <h4 style="color: #00e5ff; margin: 0 0 8px 0; font-size: 13.5px;">Required Attribution in Every Submission</h4>
+                    <h4 style="color: #3b82f6; margin: 0 0 8px 0; font-size: 13.5px;">Required Attribution in Every Submission</h4>
                     <ul style="padding-left: 20px; margin: 0 0 20px 0; font-size: 12.5px;">
                         <li style="margin-bottom: 8px;"><strong>Sentinel Data:</strong> &ldquo;Contains modified Copernicus Sentinel data 2026.&rdquo;</li>
                         <li style="margin-bottom: 8px;"><strong>DEM Data:</strong> &ldquo;Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.&rdquo;</li>
                         <li style="margin-bottom: 8px;"><strong>Infrastructure Data:</strong> &ldquo;© OpenStreetMap contributors.&rdquo;</li>
                     </ul>
 
-                    <h4 style="color: #00e5ff; margin: 0 0 8px 0; font-size: 13.5px;">Training Dataset Citations</h4>
+                    <h4 style="color: #3b82f6; margin: 0 0 8px 0; font-size: 13.5px;">Training Dataset Citations</h4>
                     <ul style="padding-left: 20px; margin: 0 0 20px 0; font-size: 12px; color: #94a3b8;">
                         <li style="margin-bottom: 6px;">Bountos, N.I., et al. (2024). <em>Kuro Siwo: A global multi-temporal SAR dataset for rapid flood mapping</em>. NeurIPS Datasets and Benchmarks.</li>
                         <li style="margin-bottom: 6px;">Bonafilia, D., et al. (2020). <em>Sen1Floods11: A georeferenced dataset to train and test deep learning flood algorithms for Sentinel-1</em>. CVPR Workshops.</li>
                     </ul>
 
-                    <h4 style="color: #00e5ff; margin: 0 0 8px 0; font-size: 13.5px;">Check-Only Validation Data</h4>
+                    <h4 style="color: #3b82f6; margin: 0 0 8px 0; font-size: 13.5px;">Check-Only Validation Data</h4>
                     <p style="margin: 0; font-size: 12px; color: #94a3b8;">
                         European Union, Copernicus Emergency Management Service data (EMSR927 activation). Strictly isolated as check-only validation.
                     </p>
@@ -676,15 +677,15 @@
                         </div>
                     </div>
 
-                    <h3 style="color: #00e5ff; font-size: 13px; margin: 18px 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">
+                    <h3 style="color: #3b82f6; font-size: 13px; margin: 18px 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">
                         🗺️ What Every Color, Marker &amp; Line Means on the Map:
                     </h3>
 
                     <div class="explainer-grid">
                         <div class="explainer-item">
                             <div class="explainer-item-header">
-                                <span class="legend-swatch polygon-swatch" style="background: rgba(0, 229, 255, 0.45); border: 1.5px solid #00e5ff;"></span>
-                                <strong style="color: #00e5ff;">Cyan Polygons: Detected Flood Extent</strong>
+                                <span class="legend-swatch polygon-swatch" style="background: rgba(59, 130, 246, 0.28); border: 1.5px solid #2563eb;"></span>
+                                <strong style="color: #3b82f6;">Blue Aquatic Polygons: Detected Flood Extent</strong>
                             </div>
                             <p>Indicates confirmed water inundation detected via Sentinel-1 SAR backscatter drop and constrained by Copernicus DEM HAND (&lt;15m) and slope (&lt;20°) to mountain river channels.</p>
                         </div>
@@ -739,14 +740,14 @@
 
                         <div class="explainer-item">
                             <div class="explainer-item-header">
-                                <span class="legend-swatch line-swatch" style="border-top: 3.5px dashed #00e5ff;"></span>
-                                <strong style="color: #00e5ff;">Cyan Dashed Vectors: D8 Downhill Runoff Paths</strong>
+                                <span class="legend-swatch line-swatch" style="border-top: 3.5px dashed #2563eb;"></span>
+                                <strong style="color: #3b82f6;">Blue Dashed Vectors: D8 Downhill Runoff Paths</strong>
                             </div>
                             <p>Interactive hydrologic vectors generated by clicking on the map. Traces steepest downhill descent runoff across Copernicus 30m DEM terrain into valley floors.</p>
                         </div>
                     </div>
 
-                    <div style="margin-top: 18px; padding: 12px 14px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 6px; font-size: 12px; color: #94a3b8;">
+                    <div style="margin-top: 18px; padding: 12px 14px; background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 6px; font-size: 12px; color: #94a3b8;">
                         <strong style="color: #f1f5f9;">Pro Tip:</strong> Use the <em>Cutoff Scenario</em> dropdown in Advanced Parameters to toggle between <strong>Strict</strong> (confirmed floodwater only) and <strong>Conservative</strong> (includes debris scour risk) to compare operational response windows.
                     </div>
                 </div>

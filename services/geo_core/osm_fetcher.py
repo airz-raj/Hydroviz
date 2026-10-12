@@ -42,7 +42,23 @@ def generate_topographic_osm_fallback(bbox: List[float]) -> Tuple[List[Dict[str,
     buildings = []
 
     # 1. Hamlets and towns situated along the valley corridor
-    town_names = ["Melamchi Bazaar", "Helambu", "Timbu", "Chanaute", "Bhotang", "Mahankal", "Talamarang", "Palchok"]
+    if mid_lon >= 84.70 and mid_lon <= 85.05 and mid_lat >= 28.20 and mid_lat <= 28.65:
+        town_names = ["Philim", "Jagat", "Salleri", "Nyak", "Dyang", "Namrung", "Lho", "Samagaun"]
+        hwy_name = "Manaslu Circuit / Budhi Gandaki Valley Trail"
+        bridge_name = "Budhi Gandaki River Crossing Bridge"
+    elif mid_lon >= 85.05 and mid_lon <= 85.35 and mid_lat >= 27.80 and mid_lat <= 28.15:
+        town_names = ["Betrawati", "Dhunche", "Syabrubesi", "Thulo Syabru", "Briddhim", "Timure", "Rasuwagadhi", "Chilime"]
+        hwy_name = "Pasang Lhamu Highway (Trishuli Corridor)"
+        bridge_name = "Trishuli River Crossing Bridge"
+    elif mid_lon >= 85.20 and mid_lon <= 85.45 and mid_lat >= 27.60 and mid_lat <= 27.80:
+        town_names = ["Kathmandu", "Patan", "Bhaktapur", "Kirtipur", "Thimi", "Madhyapur", "Budhanilkantha", "Kapan"]
+        hwy_name = "Bagmati River Corridor Highway"
+        bridge_name = "Bagmati River Crossing Bridge"
+    else:
+        town_names = ["Melamchi Bazaar", "Helambu", "Timbu", "Chanaute", "Bhotang", "Mahankal", "Talamarang", "Palchok"]
+        hwy_name = "Helambu Regional Valley Highway"
+        bridge_name = "Melamchi River Crossing Bridge"
+
     for i, name in enumerate(town_names):
         t = i / float(len(town_names) - 1)
         s_lon = min_lon + d_lon * (0.35 + 0.30 * t + 0.08 * math.sin(t * math.pi * 3))
@@ -68,7 +84,7 @@ def generate_topographic_osm_fallback(bbox: List[float]) -> Tuple[List[Dict[str,
 
     roads.append({
         "osm_id": 50001,
-        "name": "Helambu Regional Valley Highway",
+        "name": hwy_name,
         "highway": "primary",
         "coordinates": main_coords
     })
@@ -104,7 +120,7 @@ def generate_topographic_osm_fallback(bbox: List[float]) -> Tuple[List[Dict[str,
         pt = main_coords[int((i + 1) * 6)]
         bridges.append({
             "osm_id": 8001 + i,
-            "name": f"Melamchi River Crossing Bridge #{i+1}",
+            "name": f"{bridge_name} #{i+1}",
             "lat": pt[1],
             "lon": pt[0],
             "highway": "bridge"

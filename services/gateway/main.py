@@ -86,6 +86,30 @@ class JobRequest(BaseModel):
     osm_snapshot: str = "2026-07-27"
     options: Optional[dict] = None
 
+    @field_validator("event_date")
+    @classmethod
+    def validate_event_date(cls, v):
+        if not v:
+            return "2026-08-26"
+        v_str = str(v).strip()
+        parts = v_str.replace('/', '-').split('-')
+        if len(parts) == 3:
+            try:
+                if len(parts[0]) == 4:
+                    return f"{parts[0]}-{int(parts[1]):02d}-{int(parts[2]):02d}"
+                elif len(parts[2]) == 4:
+                    d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
+                    if m > 12 and d <= 12:
+                        d, m = m, d
+                    return f"{y:04d}-{m:02d}-{d:02d}"
+            except Exception:
+                pass
+        try:
+            dt = datetime.fromisoformat(v_str.replace('Z', '+00:00'))
+            return dt.strftime("%Y-%m-%d")
+        except Exception:
+            return v_str
+
     @field_validator("bbox")
     @classmethod
     def validate_bbox(cls, v):
@@ -389,14 +413,14 @@ def trace_flood_path(request: TraceRequest):
         min_lon, min_lat, max_lon, max_lat = lon0 - 0.05, lat0 - 0.05, lon0 + 0.05, lat0 + 0.05
     
     grid_size = 25
-    d_span = 0.04
+    d_span = 0.06
     grid, lats, lons = sample_elevation_grid(lat0, lon0, grid_size=grid_size, span_deg=d_span)
         
     conditioned = fill_pits(grid)
     start_r = grid_size // 2
     start_c = grid_size // 2
     
-    cell_path = trace_d8_flow_path(conditioned, start_r, start_c, max_steps=40)
+    cell_path = trace_d8_flow_path(conditioned, start_r, start_c, max_steps=50)
     
     coords = []
     for cr, cc in cell_path:
@@ -418,6 +442,7 @@ def trace_flood_path(request: TraceRequest):
         dy = (coords[i][1] - coords[i-1][1]) * 111.0
         dist_km += math.sqrt(dx*dx + dy*dy)
     dist_km = round(dist_km, 2)
+    slope_pct = round((drop / (dist_km * 1000.0) * 100.0), 1) if dist_km > 0.05 else 0.0
 
     # Calculate settlements along the traced downhill flow path using fast cached facts
     settlements_along_path = []
@@ -432,6 +457,17 @@ def trace_flood_path(request: TraceRequest):
                 with open(j_facts, "r", encoding="utf-8") as f:
                     jf = json.load(f)
                     settlements = jf.get("cutoff", {}).get("settlements") or []
+                    if not settlements and "layers" in jf and "settlements" in jf.get("layers", {}):
+                        s_feats = jf["layers"]["settlements"].get("features", [])
+                        settlements = [
+                            {
+                                "osm_id": sf.get("properties", {}).get("osm_id", 0),
+                                "name": sf.get("properties", {}).get("name", "Settlement"),
+                                "place": sf.get("properties", {}).get("place", "hamlet"),
+                                "coordinates": sf.get("geometry", {}).get("coordinates", [])
+                            }
+                            for sf in s_feats
+                        ]
                     if settlements:
                         break
             except Exception:
@@ -518,6 +554,7 @@ def trace_flood_path(request: TraceRequest):
                 "end_elevation_m": round(end_elev, 1),
                 "drop_m": drop,
                 "distance_km": dist_km,
+                "slope_percent": slope_pct,
                 "steps": len(coords),
                 "settlements_along_path": settlements_along_path,
                 "algorithm": "D8 Steepest Descent on Conditioned DEM"
