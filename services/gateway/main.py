@@ -281,7 +281,12 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
             _jobs[job_id]["status"] = "complete"
             _jobs[job_id]["stage"] = "complete"
             _jobs[job_id]["progress"] = 1.0
-            _jobs[job_id]["message"] = "Live Sentinel-1 satellite analysis completed successfully"
+            if mode == "reference_case":
+                _jobs[job_id]["message"] = facts.get("mode_description", "Curated Copernicus Sentinel-1 reference case loaded with EMSR927 validation.")
+            elif mode == "demo_simulated":
+                _jobs[job_id]["message"] = facts.get("mode_description", "Physics-conditioned topographic simulation using Copernicus DEM completed.")
+            else:
+                _jobs[job_id]["message"] = "Live Sentinel-1 satellite analysis completed successfully"
 
         _jobs[job_id]["mode"] = mode
         _jobs[job_id]["updated_at"] = _now_iso()
@@ -368,8 +373,20 @@ class TraceRequest(BaseModel):
 @app.post("/trace")
 def trace_flood_path(request: TraceRequest):
     # Execute DEM conditioning & D8 flow tracing on Copernicus WorldDEM-30 dynamically
-    lon0, lat0 = request.origin[0], request.origin[1]
-    min_lon, min_lat, max_lon, max_lat = request.bbox
+    c_x, c_y = float(request.origin[0]), float(request.origin[1])
+    if (15.0 <= c_x <= 40.0 and 60.0 <= c_y <= 105.0) or (abs(c_x) < 45.0 and abs(c_y) > 60.0):
+        lat0, lon0 = c_x, c_y
+    else:
+        lon0, lat0 = c_x, c_y
+
+    b = request.bbox
+    if len(b) == 4:
+        min_lon = min(b[0], b[2])
+        max_lon = max(b[0], b[2])
+        min_lat = min(b[1], b[3])
+        max_lat = max(b[1], b[3])
+    else:
+        min_lon, min_lat, max_lon, max_lat = lon0 - 0.05, lat0 - 0.05, lon0 + 0.05, lat0 + 0.05
     
     grid_size = 25
     d_span = 0.04
@@ -402,23 +419,42 @@ def trace_flood_path(request: TraceRequest):
         dist_km += math.sqrt(dx*dx + dy*dy)
     dist_km = round(dist_km, 2)
 
-    # Calculate settlements along the traced downhill flow path (Bonus requirement)
+    # Calculate settlements along the traced downhill flow path using fast cached facts
     settlements_along_path = []
-    try:
-        from geo_core.osm_fetcher import fetch_real_osm_features
-    except ImportError:
-        try:
-            from services.geo_core.osm_fetcher import fetch_real_osm_features
-        except ImportError:
-            fetch_real_osm_features = None
+    data_dir = _get_data_dir()
+    settlements = []
 
-    if fetch_real_osm_features:
+    # 1. Quick check in recently completed job facts
+    for jid in reversed(list(_jobs.keys())):
+        j_facts = os.path.join(data_dir, "jobs", jid, "facts.json")
+        if os.path.exists(j_facts):
+            try:
+                with open(j_facts, "r", encoding="utf-8") as f:
+                    jf = json.load(f)
+                    settlements = jf.get("cutoff", {}).get("settlements") or []
+                    if settlements:
+                        break
+            except Exception:
+                pass
+
+    # 2. If not in active facts, try local OSM fetcher
+    if not settlements:
         try:
-            osm_fetch_res = fetch_real_osm_features(request.bbox)
+            from geo_core.osm_fetcher import fetch_real_osm_features
+            osm_fetch_res = fetch_real_osm_features([min_lon, min_lat, max_lon, max_lat])
             settlements = osm_fetch_res[0] if osm_fetch_res else []
+        except Exception:
+            settlements = []
+
+    if settlements:
+        try:
             for s in settlements:
-                s_lon = float(s.get("lon", 0.0))
-                s_lat = float(s.get("lat", 0.0))
+                s_coords = s.get("coordinates") or []
+                s_lon = float(s_coords[0] if len(s_coords) >= 2 else s.get("lon", 0.0))
+                s_lat = float(s_coords[1] if len(s_coords) >= 2 else s.get("lat", 0.0))
+                if s_lon == 0.0 or s_lat == 0.0:
+                    continue
+
                 min_dist_to_path_m = float("inf")
                 cum_dist_km = 0.0
                 dist_downstream_at_closest = 0.0
@@ -449,7 +485,7 @@ def trace_flood_path(request: TraceRequest):
 
                     cum_dist_km += seg_len / 1000.0
 
-                if min_dist_to_path_m <= 1200.0:
+                if min_dist_to_path_m <= 1500.0:
                     settlements_along_path.append({
                         "osm_id": s.get("osm_id", 0),
                         "name": s.get("name", "Settlement"),
@@ -462,12 +498,14 @@ def trace_flood_path(request: TraceRequest):
         except Exception:
             pass
     
-    sorted_bbox = sorted(request.bbox)
+    sorted_bbox = sorted([min_lon, min_lat, max_lon, max_lat])
     dem_hash = hashlib.sha256(f"{sorted_bbox}".encode('utf-8')).hexdigest()[:16]
+
+    log_system_event("d8_trace", f"D8 flow vector traced: {len(coords)} points, {dist_km} km, drop={drop}m", details={"origin": [round(lon0, 5), round(lat0, 5)], "drop_m": drop, "distance_km": dist_km, "settlements_count": len(settlements_along_path)}, level="INFO", category="GEO")
 
     result = {
         "dem_hash": dem_hash,
-        "origin": request.origin,
+        "origin": [round(lon0, 5), round(lat0, 5)],
         "settlements_along_path": settlements_along_path,
         "path": {
             "type": "Feature",
@@ -486,13 +524,6 @@ def trace_flood_path(request: TraceRequest):
             }
         }
     }
-    log_system_event(
-        "flow_trace",
-        f"D8 flow trace from [{lat0}, {lon0}]: drop={drop}m, dist={dist_km}km, {len(settlements_along_path)} downstream settlements",
-        details={"origin": request.origin, "drop_m": drop, "dist_km": dist_km, "settlements_count": len(settlements_along_path)},
-        level="INFO",
-        category="GEO"
-    )
     return result
 
 @app.get("/jobs/{job_id}/layers")

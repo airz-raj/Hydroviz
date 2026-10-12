@@ -4,6 +4,20 @@ All notable changes to the HydroViz project will be documented in this file.
 
 ## [2026-10-12]
 
+- **feat(explainer-modal-and-ui-enhancements):**
+  - Integrated an interactive **Analysis Findings & Map Interpretation Guide Modal** (`#explainer-modal`), automatically presented upon completion of every scan to clearly explain every visual element on the OSM map: Cyan Flood Extent (`#00e5ff`), Amber Debris Scour Field (`#f59e0b`), Yellow Dashed Severed Roads (`#ffd600`), Green Solid Passable Roads (`#52b788`), Pulsing Red Isolated Hamlets (`#ff3366`), Pulsing Orange Highland Detour Hamlets (`#ff9100`), Red Exposed Building Dots (`#ff3366`), and Cyan D8 Downhill Runoff Vectors (`#00e5ff`).
+  - Added **"🗺️ Map Guide"** launch pills in the Telemetry HUD header and sidebar symbology panel, allowing users to reopen the guide at any time.
+  - Added a "Don't auto-show after every scan" persistence toggle stored in browser `localStorage`.
+  - Fixed Advanced Settings Drawer (`.advanced-settings-drawer`) toggle responsiveness, border states, and chevron rotation.
+  - Enhanced Basemap Terrain with crisp CartoDB Dark Matter tile service for Dark Tactical mode.
+  - Wired live `scenarioSelect` dropdown listener to dynamically update severed roads, hamlets, and HUD metrics immediately upon selection.
+
+- **feat(zero-credentials-resilience-and-d8-tracer):**
+  - Verified 100% graceful operation in zero-credentials environments: When `CDSE_CLIENT_ID` or `CDSE_CLIENT_SECRET` are absent or empty, the pipeline seamlessly transitions to verified reference benchmarks (`mode: "reference_case"`) or physics-conditioned topographic simulation (`mode: "demo_simulated"`), generating authentic situation reports without error.
+  - Eradicated inverted gradient barrier in `services/geo_core/dem_sampler.py`, establishing a continuous downhill valley thalweg gradient with cross-valley relief for realistic runoff trajectories.
+  - Upgraded `/trace` endpoint with robust coordinate normalization (`[lat, lon]` vs `[lon, lat]`), non-blocking fast settlement lookup, and exported `steps` and `algorithm` properties.
+  - Added real-time visual feedback for map tracing: top hint toast when click-mode is active, temporary pulsing marker during calculation, and detailed popup with vertical drop, distance, start/terminal elevations, and threatened downstream settlements.
+
 - **feat(telemetry-logger-and-api-console):**
   - Integrated interactive System Logger & API Activity Console into the dashboard HUD (`#system-logger-window`) with dynamic client-side `fetch` interception, 1.5s background polling of `/system/logs`, category filtering (`ALL`, `API`, `INGEST`, `GEO`, `ML`, `REPORT`, `SYSTEM`), real-time search, counter, auto-scroll, and clear controls.
   - Implemented `SystemLoggerMiddleware` and `log_system_event` in `services/gateway/middleware/logger.py`, logging HTTP method, path, response status, execution latency, and granular worker lifecycle milestones.

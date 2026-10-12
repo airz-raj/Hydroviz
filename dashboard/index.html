@@ -260,6 +260,9 @@
                     </div>
                     <span class="collapse-icon" id="legend-collapse-icon">▾</span>
                 </div>
+                <button type="button" id="open-explainer-btn" class="tool-btn-secondary" style="width: 100%; margin-bottom: 10px; font-size: 11.5px; padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 6px; border-color: rgba(0, 229, 255, 0.4); color: #00e5ff; cursor: pointer;">
+                    <span>🗺️ Map Symbology &amp; Findings Guide</span>
+                </button>
                 <div class="legend-content" id="legend-content">
                     <div class="legend-item">
                         <span class="legend-swatch polygon-swatch" style="background: rgba(0, 229, 255, 0.45); border: 1.5px solid #00e5ff;"></span>
@@ -372,6 +375,11 @@
             <!-- Leaflet Map Container -->
             <div id="map"></div>
 
+            <!-- Interactive D8 Trace Map Hint Banner -->
+            <div id="trace-hint-banner" class="trace-hint-banner" style="display: none;">
+                <span>💧</span> Click anywhere on mountain terrain or valley slopes to simulate downhill flow vectors
+            </div>
+
             <!-- Floating Mode Banner -->
             <div id="mode-banner" class="mode-banner" style="display: none;">
                 <div class="mode-banner-badge" id="mode-banner-badge">REFERENCE BENCHMARK CASE</div>
@@ -386,7 +394,10 @@
             <div id="telemetry-hud" class="hud-panel" style="display: none;">
                 <div class="hud-header">
                     <span class="live-indicator"><span class="dot"></span> LIVE TELEMETRY</span>
-                    <span class="hud-time" id="hud-timestamp">--</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button type="button" id="hud-guide-btn" class="hud-guide-btn" title="Open Map Symbology &amp; Findings Guide">🗺️ Map Guide</button>
+                        <span class="hud-time" id="hud-timestamp">--</span>
+                    </div>
                 </div>
                 <div class="hud-metrics">
                     <div class="metric-card">
@@ -625,6 +636,128 @@
                 </div>
                 <div class="modal-footer" style="display: flex; justify-content: flex-end;">
                     <button class="modal-btn primary" id="attribution-modal-ok-btn">Understood &amp; Acknowledged</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Explainer & Map Interpretation Guide Modal -->
+        <div id="explainer-modal" class="modal-backdrop" style="display: none;">
+            <div class="modal-card" style="max-width: 760px;">
+                <div class="modal-header">
+                    <div class="modal-title-group">
+                        <span class="modal-badge">POST-ANALYSIS INTERPRETATION GUIDE</span>
+                        <h2>Analysis Findings &amp; Map Symbology Guide</h2>
+                        <span class="modal-id" id="explainer-job-id">Job ID: --</span>
+                    </div>
+                    <button class="modal-close" id="explainer-close-btn">&times;</button>
+                </div>
+                <div class="modal-body" style="padding: 24px; font-size: 13px; color: #cbd5e1; line-height: 1.6; max-height: 540px; overflow-y: auto;">
+                    <!-- Quick Summary Strip -->
+                    <div class="explainer-summary-strip" id="explainer-summary-strip">
+                        <div class="explainer-stat-tile">
+                            <div class="explainer-stat-val cyan" id="expl-flood-val">-- km²</div>
+                            <div class="explainer-stat-label">Flooded Extent</div>
+                        </div>
+                        <div class="explainer-stat-tile">
+                            <div class="explainer-stat-val amber" id="expl-debris-val">-- km²</div>
+                            <div class="explainer-stat-label">Debris Hazard</div>
+                        </div>
+                        <div class="explainer-stat-tile">
+                            <div class="explainer-stat-val red" id="expl-bld-val">--</div>
+                            <div class="explainer-stat-label">Exposed Buildings</div>
+                        </div>
+                        <div class="explainer-stat-tile">
+                            <div class="explainer-stat-val yellow" id="expl-roads-val">-- km</div>
+                            <div class="explainer-stat-label">Severed Roads</div>
+                        </div>
+                        <div class="explainer-stat-tile">
+                            <div class="explainer-stat-val red" id="expl-settle-val">--</div>
+                            <div class="explainer-stat-label">Isolated Hamlets</div>
+                        </div>
+                    </div>
+
+                    <h3 style="color: #00e5ff; font-size: 13px; margin: 18px 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px;">
+                        🗺️ What Every Color, Marker &amp; Line Means on the Map:
+                    </h3>
+
+                    <div class="explainer-grid">
+                        <div class="explainer-item">
+                            <div class="explainer-item-header">
+                                <span class="legend-swatch polygon-swatch" style="background: rgba(0, 229, 255, 0.45); border: 1.5px solid #00e5ff;"></span>
+                                <strong style="color: #00e5ff;">Cyan Polygons: Detected Flood Extent</strong>
+                            </div>
+                            <p>Indicates confirmed water inundation detected via Sentinel-1 SAR backscatter drop and constrained by Copernicus DEM HAND (&lt;15m) and slope (&lt;20°) to mountain river channels.</p>
+                        </div>
+
+                        <div class="explainer-item">
+                            <div class="explainer-item-header">
+                                <span class="legend-swatch polygon-swatch" style="background: rgba(245, 158, 11, 0.35); border: 1.5px dashed #f59e0b;"></span>
+                                <strong style="color: #f59e0b;">Amber Polygons: Debris Flow &amp; Scour Field</strong>
+                            </div>
+                            <p>Highlights geomorphic disturbed ground and debris scour fields on steep channel flanks and alluvial fans, posing high secondary hazard to roads and bridges.</p>
+                        </div>
+
+                        <div class="explainer-item">
+                            <div class="explainer-item-header">
+                                <span class="legend-swatch line-swatch" style="border-top: 3.5px dashed #ffd600;"></span>
+                                <strong style="color: #ffd600;">Yellow Dashed Lines: Severed Roads</strong>
+                            </div>
+                            <p>Pre-event OSM highway segments submerged or blocked by floodwater and debris flow. Completely impassable for emergency vehicle access.</p>
+                        </div>
+
+                        <div class="explainer-item">
+                            <div class="explainer-item-header">
+                                <span class="legend-swatch line-swatch" style="border-top: 2.5px solid #52b788;"></span>
+                                <strong style="color: #52b788;">Green Solid Lines: Passable Roads</strong>
+                            </div>
+                            <p>Intact, operational road network segments safely elevated above floodwater and debris scour, usable for rescue staging and evacuation.</p>
+                        </div>
+
+                        <div class="explainer-item">
+                            <div class="explainer-item-header">
+                                <span class="legend-swatch ring-swatch" style="border: 2px solid #ff3366; background: rgba(255,51,102,0.3);"></span>
+                                <strong style="color: #ff3366;">Pulsing Red Markers: Isolated Hamlets</strong>
+                            </div>
+                            <p>Settlements cut off from all reachable destination hubs. Multi-source Dijkstra routing verifies that all connecting roads are severed by water or debris.</p>
+                        </div>
+
+                        <div class="explainer-item">
+                            <div class="explainer-item-header">
+                                <span class="legend-swatch ring-swatch" style="border: 2px solid #ff9100; background: rgba(255,145,0,0.3);"></span>
+                                <strong style="color: #ff9100;">Pulsing Orange Markers: Highland Detour Hamlets</strong>
+                            </div>
+                            <p>Settlements where primary valley highway access is submerged, but an alternate circuitous highland ridge bypass remains passable.</p>
+                        </div>
+
+                        <div class="explainer-item">
+                            <div class="explainer-item-header">
+                                <span class="legend-swatch dot-swatch" style="background: #ff3366; box-shadow: 0 0 6px rgba(255,51,102,0.8);"></span>
+                                <strong style="color: #ff3366;">Small Red Dots: Exposed Structures</strong>
+                            </div>
+                            <p>Pre-event building footprints directly intersecting flood inundation or debris hazard polygons. Identifies structures requiring immediate welfare checks.</p>
+                        </div>
+
+                        <div class="explainer-item">
+                            <div class="explainer-item-header">
+                                <span class="legend-swatch line-swatch" style="border-top: 3.5px dashed #00e5ff;"></span>
+                                <strong style="color: #00e5ff;">Cyan Dashed Vectors: D8 Downhill Runoff Paths</strong>
+                            </div>
+                            <p>Interactive hydrologic vectors generated by clicking on the map. Traces steepest downhill descent runoff across Copernicus 30m DEM terrain into valley floors.</p>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 18px; padding: 12px 14px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 6px; font-size: 12px; color: #94a3b8;">
+                        <strong style="color: #f1f5f9;">Pro Tip:</strong> Use the <em>Cutoff Scenario</em> dropdown in Advanced Parameters to toggle between <strong>Strict</strong> (confirmed floodwater only) and <strong>Conservative</strong> (includes debris scour risk) to compare operational response windows.
+                    </div>
+                </div>
+                <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                    <label style="font-size: 11.5px; color: #64748b; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" id="dont-show-explainer-cb"> Don't auto-show after every scan
+                    </label>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="modal-btn secondary" id="explainer-view-report-btn">Open SitRep</button>
+                        <button class="modal-btn primary" id="explainer-ok-btn">Explore Map</button>
+                    </div>
                 </div>
             </div>
         </div>

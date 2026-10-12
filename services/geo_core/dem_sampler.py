@@ -71,13 +71,11 @@ def sample_elevation_grid(center_lat: float, center_lon: float, grid_size: int =
             except Exception:
                 continue
 
-        # 2. Try fetching live DEM from CDSE Process API if credentials are present
+        # 2. Check local disk DEM cache if previously ingested
         try:
-            from services.ingest.dem_fetcher import fetch_dem_cog
             cache_dem_dir = os.path.join(data_dir, "dem_cache")
-            os.makedirs(cache_dem_dir, exist_ok=True)
             dem_out = os.path.join(cache_dem_dir, f"dem_{round(center_lat, 3)}_{round(center_lon, 3)}.tif")
-            if os.path.exists(dem_out) or fetch_dem_cog([min(lons) - 0.01, min(lats) - 0.01, max(lons) + 0.01, max(lats) + 0.01], dem_out):
+            if os.path.exists(dem_out):
                 with rasterio.open(dem_out) as src:
                     grid = []
                     for r in range(grid_size):
@@ -92,11 +90,11 @@ def sample_elevation_grid(center_lat: float, center_lon: float, grid_size: int =
         except Exception:
             pass
 
-        # 3. Try streaming from AWS Copernicus GLO-30 COGs via rasterio /vsicurl/
+        # 3. Try streaming from AWS Copernicus GLO-30 COGs via rasterio /vsicurl/ with fast timeout
         try:
             tile_url = get_copernicus_dem_tile_url(center_lat, center_lon)
             vsi_url = f"/vsicurl/{tile_url}"
-            with rasterio.open(vsi_url, timeout=3.0) as src:
+            with rasterio.open(vsi_url, timeout=2.0) as src:
                 grid = []
                 for r in range(grid_size):
                     row = []
@@ -110,20 +108,22 @@ def sample_elevation_grid(center_lat: float, center_lon: float, grid_size: int =
         except Exception:
             pass
 
-    # 4. Fallback: Continuous downhill gradient along Himalayan valley channels (never flat)
+    # 4. Fallback: Physics-conditioned continuous downhill Himalayan valley terrain
     grid = []
     for r in range(grid_size):
         row = []
         r_lat = lats[r]
+        dist_along = (center_lat - r_lat) * 111.0  # Positive heading south downstream
         for c in range(grid_size):
             c_lon = lons[c]
-            # Calculate valley thalweg distance and continuous downstream slope
-            v_lon = center_lon + (r_lat - center_lat) * 0.12
-            dist_km = abs(c_lon - v_lon) * 111.0 * math.cos(math.radians(r_lat))
-            # Downhill slope downstream along latitude (18m per km)
-            base_elev = 1200.0 + (r_lat - center_lat) * 1200.0
-            elev = base_elev + (dist_km * 1000.0) * math.tan(math.radians(18.0))
-            row.append(round(max(300.0, elev), 1))
+            # Natural thalweg channel
+            v_lon = center_lon + 0.003 * math.sin(dist_along / 1.5)
+            cross_dist_km = abs(c_lon - v_lon) * 111.0 * math.cos(math.radians(r_lat))
+            # Downward river thalweg gradient (38m drop per km)
+            base_elev = 1650.0 - dist_along * 38.0
+            # V/U-shaped valley relief on flanks
+            elev = base_elev + 55.0 * (cross_dist_km ** 1.5)
+            row.append(round(max(200.0, elev), 1))
         grid.append(row)
 
     return grid, lats, lons

@@ -1863,3 +1863,130 @@ input:focus, select.custom-select:focus {
     50% { opacity: 0.35; box-shadow: 0 0 2px #00e5ff; }
 }
 
+/* ==========================================================================
+   Analysis Findings & Map Interpretation Guide Modal
+   ========================================================================== */
+.explainer-summary-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.explainer-stat-tile {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    text-align: center;
+}
+
+.explainer-stat-val {
+    font-size: 18px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    color: #ffffff;
+}
+
+.explainer-stat-val.cyan { color: #00e5ff; }
+.explainer-stat-val.amber { color: #f59e0b; }
+.explainer-stat-val.red { color: #ff3366; }
+.explainer-stat-val.yellow { color: #ffd600; }
+
+.explainer-stat-label {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 3px;
+}
+
+.explainer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 640px) {
+    .explainer-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.explainer-item {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    transition: all 0.2s ease;
+}
+
+.explainer-item:hover {
+    background: rgba(255, 255, 255, 0.045);
+    border-color: rgba(0, 229, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+.explainer-item-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.explainer-item p {
+    margin: 0;
+    font-size: 11.5px;
+    color: #94a3b8;
+    line-height: 1.5;
+}
+
+.hud-guide-btn {
+    background: rgba(0, 229, 255, 0.12);
+    border: 1px solid rgba(0, 229, 255, 0.4);
+    color: #00e5ff;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.hud-guide-btn:hover {
+    background: rgba(0, 229, 255, 0.25);
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
+}
+
+.trace-hint-banner {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid #00e5ff;
+    box-shadow: 0 4px 20px rgba(0, 229, 255, 0.35);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #f8fafc;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    animation: fadeInDown 0.3s ease;
+}
+
+@keyframes fadeInDown {
+    from { opacity: 0; transform: translate(-50%, -10px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+

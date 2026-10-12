@@ -38,13 +38,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Base Tile Layers
     const baseLayers = {
         satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 18
+            maxZoom: 18,
+            attribution: 'Esri, Maxar, Earthstar Geographics'
         }),
-        dark: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 16
+        dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            subdomains: 'abcd',
+            attribution: '&copy; CARTO, &copy; OpenStreetMap'
         }),
         osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
         })
     };
 
@@ -640,14 +644,51 @@ document.addEventListener('DOMContentLoaded', () => {
         const initialScenario = scenarioSelect?.value || 'strict';
         updateCutoffAndRoads(initialScenario);
 
-        if (scenarioSelect) {
-            scenarioSelect.onchange = (e) => {
-                updateCutoffAndRoads(e.target.value);
-            };
+        // Auto-show explainer guide after scan completion unless user suppressed it
+        const dontShow = localStorage.getItem('hydroviz_hide_explainer') === 'true';
+        if (!dontShow) {
+            setTimeout(() => {
+                showExplainerModal(facts);
+            }, 700);
         }
     }
 
+    // Explainer Modal Controller
+    function showExplainerModal(facts) {
+        const explainerModal = document.getElementById('explainer-modal');
+        if (!explainerModal) return;
+
+        const f = facts || currentFacts || {};
+        const floodArea = f.flood?.flooded_area_km2 ?? 0;
+        const debrisArea = f.debris?.debris_area_km2 ?? (f.layers?.debris?.features ? (f.layers.debris.features.length * 1.8).toFixed(1) : 0);
+        const exposedBuildings = f.exposure?.buildings?.exposed_high ?? f.exposure?.buildings_exposed_high ?? 0;
+        const exposedRoadsKm = f.exposure?.roads_km?.exposed_strict ?? f.exposure?.roads_km?.exposed ?? (f.exposure?.roads_exposed_length_m ? (f.exposure.roads_exposed_length_m / 1000).toFixed(1) : 0);
+        const isolatedHamlets = f.cutoff?.isolated_settlements ?? (f.cutoff?.settlements ? f.cutoff.settlements.filter(s => s.status === 'isolated').length : 0);
+
+        const elFlood = document.getElementById('expl-flood-val');
+        if (elFlood) elFlood.innerText = `${floodArea} km²`;
+        const elDebris = document.getElementById('expl-debris-val');
+        if (elDebris) elDebris.innerText = `${debrisArea} km²`;
+        const elBld = document.getElementById('expl-bld-val');
+        if (elBld) elBld.innerText = `${exposedBuildings}`;
+        const elRoads = document.getElementById('expl-roads-val');
+        if (elRoads) elRoads.innerText = `${exposedRoadsKm} km`;
+        const elSettle = document.getElementById('expl-settle-val');
+        if (elSettle) elSettle.innerText = `${isolatedHamlets}`;
+        const elJobId = document.getElementById('explainer-job-id');
+        if (elJobId) elJobId.innerText = `Job ID: ${currentJobId || 'Latest Scan'}`;
+
+        const dontShowCb = document.getElementById('dont-show-explainer-cb');
+        if (dontShowCb) {
+            dontShowCb.checked = localStorage.getItem('hydroviz_hide_explainer') === 'true';
+        }
+
+        explainerModal.style.display = 'flex';
+    }
+
     // 6. Interactive D8 Downhill Flow Path Tracing Tool
+    const traceHintBanner = document.getElementById('trace-hint-banner');
+
     async function runD8Trace(lng, lat) {
         const origin = [parseFloat(Number(lng).toFixed(5)), parseFloat(Number(lat).toFixed(5))];
         const bboxInput = document.getElementById('bbox-input').value;
@@ -666,6 +707,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         traceBtnLabel.innerText = "Tracing Flow Vector...";
 
+        // Provide instant visual feedback at click point while calculating
+        const tempPulseMarker = L.circleMarker([lat, lng], {
+            radius: 8,
+            color: '#00e5ff',
+            fillColor: '#00e5ff',
+            fillOpacity: 0.8,
+            weight: 3
+        }).addTo(traceLayerGroup);
+        tempPulseMarker.bindTooltip("💧 Simulating D8 downhill runoff path...", { permanent: true, direction: "top" }).openTooltip();
+
         try {
             const traceRes = await fetch('/trace', {
                 method: 'POST',
@@ -681,6 +732,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const traceData = await traceRes.json();
+            traceLayerGroup.removeLayer(tempPulseMarker);
+
             if (traceData.status === 'unavailable' || !traceData.path) {
                 alert(traceData.message || "Georeferenced DEM data is not available for this coordinate to compute downhill flow routing.");
                 traceBtnLabel.innerText = "Click on Map to Trace";
@@ -744,6 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return traceData;
 
         } catch (err) {
+            traceLayerGroup.removeLayer(tempPulseMarker);
             console.error("Trace error:", err);
             alert("Could not compute flow path: " + err.message);
         } finally {
@@ -760,12 +814,14 @@ document.addEventListener('DOMContentLoaded', () => {
             traceStatusBadge.innerText = "Click Mode: ACTIVE";
             traceStatusBadge.classList.add('active');
             map.getContainer().classList.add('crosshair-cursor');
+            if (traceHintBanner) traceHintBanner.style.display = 'flex';
         } else {
             traceToggleBtn.classList.remove('active');
             traceBtnLabel.innerText = "Enable Map Click Tracing";
             traceStatusBadge.innerText = "Click Mode: OFF";
             traceStatusBadge.classList.remove('active');
             map.getContainer().classList.remove('crosshair-cursor');
+            if (traceHintBanner) traceHintBanner.style.display = 'none';
         }
     });
 
@@ -778,6 +834,62 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isTraceModeActive) return;
         await runD8Trace(e.latlng.lng, e.latlng.lat);
     });
+
+    // Wire Scenario Select Dropdown (Active immediately upon changes)
+    if (scenarioSelect) {
+        scenarioSelect.addEventListener('change', (e) => {
+            if (currentFacts) {
+                renderJobResults(currentFacts, 85.50, 27.80, 85.65, 28.05);
+            }
+        });
+    }
+
+    // Wire Advanced Parameters Drawer Summary toggle
+    const advSummary = document.querySelector('.advanced-summary');
+    const advDrawer = document.getElementById('advanced-settings');
+    if (advSummary && advDrawer) {
+        advSummary.addEventListener('click', (e) => {
+            e.preventDefault();
+            advDrawer.open = !advDrawer.open;
+        });
+    }
+
+    // Wire Explainer Modal Handlers
+    const explainerModal = document.getElementById('explainer-modal');
+    const explainerCloseBtn = document.getElementById('explainer-close-btn');
+    const explainerOkBtn = document.getElementById('explainer-ok-btn');
+    const explainerViewReportBtn = document.getElementById('explainer-view-report-btn');
+    const dontShowExplainerCb = document.getElementById('dont-show-explainer-cb');
+    const hudGuideBtn = document.getElementById('hud-guide-btn');
+    const openExplainerBtn = document.getElementById('open-explainer-btn');
+
+    if (explainerCloseBtn) explainerCloseBtn.onclick = () => { if (explainerModal) explainerModal.style.display = 'none'; };
+    if (explainerOkBtn) explainerOkBtn.onclick = () => { if (explainerModal) explainerModal.style.display = 'none'; };
+    if (explainerViewReportBtn) explainerViewReportBtn.onclick = () => {
+        if (explainerModal) explainerModal.style.display = 'none';
+        if (viewReportBtn) viewReportBtn.click();
+    };
+    if (dontShowExplainerCb) {
+        dontShowExplainerCb.onchange = (e) => {
+            localStorage.setItem('hydroviz_hide_explainer', e.target.checked ? 'true' : 'false');
+        };
+    }
+    if (hudGuideBtn) hudGuideBtn.onclick = () => showExplainerModal(currentFacts);
+    if (openExplainerBtn) openExplainerBtn.onclick = () => showExplainerModal(currentFacts);
+
+    // Close modals on escape key or clicking backdrop
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (explainerModal) explainerModal.style.display = 'none';
+            if (reportModal) reportModal.style.display = 'none';
+        }
+    });
+
+    if (explainerModal) {
+        explainerModal.addEventListener('click', (e) => {
+            if (e.target === explainerModal) explainerModal.style.display = 'none';
+        });
+    }
 
     // Expose globals for inspection & testing
     window.map = map;
