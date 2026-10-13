@@ -144,11 +144,12 @@ def generate_topographic_osm_fallback(bbox: List[float]) -> Tuple[List[Dict[str,
 
     return settlements, roads, bridges, buildings
 
-def fetch_real_osm_features(bbox: List[float], timeout_sec: float = 12.0) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+def fetch_real_osm_features(bbox: List[float], timeout_sec: float = 12.0, allow_demo: bool = False) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Queries OpenStreetMap dynamically for real settlements, road networks, bridges, and buildings
     within the specified bounding box: [min_lon, min_lat, max_lon, max_lat].
-    Includes fast multi-endpoint fallback, robust response caching, and realistic topological baseline.
+    Includes multi-endpoint fallback and response caching.
+    In normal/live processing, synthetic fallback data is not silently substituted.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
     cache_dir = _get_cache_dir()
@@ -159,12 +160,21 @@ def fetch_real_osm_features(bbox: List[float], timeout_sec: float = 12.0) -> Tup
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
                 cached = json.load(f)
-                return (
-                    cached.get("settlements", []),
-                    cached.get("roads", []),
-                    cached.get("bridges", []),
-                    cached.get("buildings", [])
-                )
+                is_synthetic = cached.get("synthetic", False)
+                if not is_synthetic:
+                    cached_settlements = cached.get("settlements", [])
+                    if any(s.get("osm_id") in range(9001, 9020) for s in cached_settlements):
+                        is_synthetic = True
+                if is_synthetic and not allow_demo:
+                    # Do not return fabricated synthetic features in normal/live processing
+                    pass
+                else:
+                    return (
+                        cached.get("settlements", []),
+                        cached.get("roads", []),
+                        cached.get("bridges", []),
+                        cached.get("buildings", [])
+                    )
         except Exception:
             pass
 
@@ -251,15 +261,23 @@ def fetch_real_osm_features(bbox: List[float], timeout_sec: float = 12.0) -> Tup
         except Exception:
             continue
 
-    # If live Overpass failed or returned empty data, use realistic topological fallback
+    # If live Overpass failed or returned empty data:
     if not success or (not settlements and not roads):
-        settlements, roads, bridges, buildings = generate_topographic_osm_fallback(bbox)
+        if allow_demo:
+            settlements, roads, bridges, buildings = generate_topographic_osm_fallback(bbox)
+            is_synthetic_result = True
+        else:
+            # Normal/live processing: return explicit empty/partial state without synthetic features
+            is_synthetic_result = False
+    else:
+        is_synthetic_result = False
 
-    # Cache successful / synthesized feature set
+    # Cache successful feature set
     try:
         with open(cache_file, "w", encoding="utf-8") as f:
             json.dump({
                 "bbox": bbox,
+                "synthetic": is_synthetic_result,
                 "settlements": settlements,
                 "roads": roads,
                 "bridges": bridges,

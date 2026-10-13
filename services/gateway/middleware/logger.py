@@ -8,6 +8,7 @@ from starlette.responses import Response
 
 # In-memory thread-safe circular buffer for system logs (max 1000 items)
 _system_logs: deque = deque(maxlen=1000)
+_log_counter: int = 0
 
 def log_system_event(
     *args,
@@ -25,6 +26,7 @@ def log_system_event(
       log_system_event("INFO", "API", "message")
       log_system_event("osm_ingest", "Found features...", details={...}, level="INFO", category="GEO")
     """
+    global _log_counter
     if len(args) == 3:
         level, category, message = args[0], args[1], args[2]
     elif len(args) == 2:
@@ -38,8 +40,9 @@ def log_system_event(
     msg = kwargs.get("message") or message
     meta = metadata or details or kwargs.get("details") or kwargs.get("meta") or {}
 
+    _log_counter += 1
     entry = {
-        "id": len(_system_logs) + 1,
+        "id": _log_counter,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "level": lvl,
         "category": cat,

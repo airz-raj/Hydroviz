@@ -41,10 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
             maxZoom: 18,
             attribution: 'Esri, Maxar, Earthstar Geographics'
         }),
-        dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            maxZoom: 19,
-            subdomains: 'abcd',
-            attribution: '&copy; CARTO, &copy; OpenStreetMap'
+        dark: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 16,
+            attribution: 'Esri, HERE, Garmin, &copy; OpenStreetMap contributors'
         }),
         osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
@@ -448,60 +447,73 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnText.innerText = "Scanning Satellite AOI...";
             }
 
-            // Poll Job Status until complete (up to 120s for real SAR data acquisition)
+            // Poll Job Status until backend reports a terminal status (allowing up to 10 minutes for multi-scene downloads)
             let pollAttempts = 0;
-            const maxPollAttempts = 160;
+            const maxPollAttempts = 600;
+            let lastStatusData = null;
             while (!isComplete && pollAttempts < maxPollAttempts) {
                 pollAttempts++;
-                await new Promise(r => setTimeout(r, 600));
+                await new Promise(r => setTimeout(r, 1000));
 
                 try {
                     const statusRes = await fetch(`/jobs/${currentJobId}/status`);
                     if (statusRes.ok) {
                         const statusData = await statusRes.json();
+                        lastStatusData = statusData;
                         const progress = statusData.progress || 0.0;
                         progressFill.style.width = Math.max(10, Math.round(progress * 100)) + '%';
 
                         if (statusData.status === 'failed') {
                             isComplete = true;
-                            stepCounter.innerText = 'Failed';
-                            progressText.innerText = statusData.error?.message || "Analysis failed.";
-                            updateModeBanner('failed', null, statusData.error?.message);
-                            break;
+                            const errStage = statusData.error?.stage || statusData.stage || 'unknown';
+                            const errMsg = statusData.error?.message || statusData.message || "Analysis failed.";
+                            throw new Error(`[Stage: ${errStage}] ${errMsg}`);
                         } else if (statusData.status === 'partial') {
                             isComplete = true;
                             stepCounter.innerText = 'Partial (No Imagery)';
                             progressText.innerText = statusData.message || "Partial analysis: OSM mapped; satellite imagery unavailable.";
+                        } else if (statusData.status === 'reference_case') {
+                            isComplete = true;
+                            stepCounter.innerText = 'Complete (Reference)';
+                            progressText.innerText = statusData.message || "Curated reference benchmark loaded.";
+                        } else if (statusData.status === 'demo_simulated') {
+                            isComplete = true;
+                            stepCounter.innerText = 'Complete (Simulation)';
+                            progressText.innerText = statusData.message || "Physics-conditioned topographic simulation completed.";
                         } else if (statusData.stage === 'satellite_ingest' || statusData.status === 'ingesting') {
                             stepCounter.innerText = 'Stage 1/5';
-                            progressText.innerText = "Querying Sentinel-1 IW GRD SAR catalog (ESA CDSE)...";
-                            tagSensor.innerText = "SAR: Orbit Pair Selection";
+                            progressText.innerText = statusData.message || "Querying Sentinel-1 IW GRD SAR catalog (ESA CDSE)...";
+                            tagSensor.innerText = "SAR: Ingesting";
                         } else if (statusData.stage === 'flood_segmentation' || statusData.status === 'processing') {
                             stepCounter.innerText = 'Stage 2/5';
-                            progressText.innerText = "Executing SAR change detection & terrain-constrained flood delineation...";
+                            progressText.innerText = statusData.message || "Executing SAR change detection & terrain-constrained flood delineation...";
                             tagSensor.innerText = "SAR: Calibrated (VV/VH)";
                             const elapsedMs = Math.max(16, Math.round(performance.now() - scanStartTime));
-                            tagOnnx.innerText = `Method: Adaptive Otsu (${elapsedMs}ms)`;
+                            tagOnnx.innerText = `Method: ONNX Segmentation (${elapsedMs}ms)`;
                         } else if (statusData.stage === 'exposure_routing' || statusData.status === 'analyzing') {
                             stepCounter.innerText = 'Stage 3/5';
-                            progressText.innerText = "Applying Copernicus DEM slope mask & Dijkstra graph routing...";
+                            progressText.innerText = statusData.message || "Applying Copernicus DEM slope mask & Dijkstra graph routing...";
                             tagDem.innerText = `DEM: Slope < ${slopeThreshold}°`;
                         } else if (statusData.stage === 'generating_reports' || statusData.status === 'reporting') {
                             stepCounter.innerText = 'Stage 4/5';
-                            progressText.innerText = "Compiling bilingual situation report with number guard...";
+                            progressText.innerText = statusData.message || "Compiling bilingual situation report with number guard...";
                         } else if (statusData.status === 'complete' || progress >= 1.0) {
                             isComplete = true;
                             stepCounter.innerText = 'Complete';
-                            progressText.innerText = "Scan finished: Vector layers and analytics compiled.";
+                            progressText.innerText = statusData.message || "Scan finished: Vector layers and analytics compiled.";
                         }
                     }
                 } catch (pollErr) {
+                    if (lastStatusData && lastStatusData.status === 'failed') {
+                        throw pollErr;
+                    }
                     console.warn("Poll status notice:", pollErr);
                 }
             }
 
             if (!isComplete) {
-                throw new Error("Analysis job timed out while processing large satellite acquisition.");
+                const stageName = lastStatusData?.stage || lastStatusData?.status || 'satellite_ingest';
+                throw new Error(`Analysis job timed out in stage '${stageName}' after ${pollAttempts}s without reaching terminal status.`);
             }
 
             // Fetch live facts
@@ -519,17 +531,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Update Status Tags dynamically so they reflect actual execution path
                 const factsMode = currentFacts.mode || currentFacts.flood?.mode || 'live_inferred';
+                const hasS1Rasters = currentFacts.inputs?.has_s1_rasters === true;
+                const hasS1Pair = Boolean(currentFacts.inputs?.s1_pair);
+                const demUsed = Boolean(currentFacts.inputs?.dem || currentFacts.applied_thresholds);
+
                 if (factsMode === 'partial') {
                     stepCounter.innerText = "Partial (No Imagery)";
                     tagSensor.innerText = "SAR: No Pass in Window";
                     tagOnnx.innerText = "Method: Skipped";
-                    tagDem.innerText = "DEM: Copernicus 30m";
-                } else {
+                } else if (factsMode === 'reference_case') {
+                    stepCounter.innerText = "Complete (Reference)";
+                    tagSensor.innerText = "SAR: Reference Benchmark";
+                    tagOnnx.innerText = "Method: Curated Ground Truth";
+                } else if (factsMode === 'demo_simulated') {
+                    stepCounter.innerText = "Complete (Simulation)";
+                    tagSensor.innerText = "SAR: Not Used (Simulation)";
+                    tagOnnx.innerText = "Method: Terrain Heuristic";
+                } else if (factsMode === 'live_inferred') {
                     stepCounter.innerText = "Complete (Live)";
-                    tagSensor.innerText = "SAR: Live Downloaded";
+                    tagSensor.innerText = hasS1Rasters ? "SAR: Live Downloaded" : (hasS1Pair ? "SAR: Catalog Matched" : "SAR: Live Query");
                     tagOnnx.innerText = "Method: Otsu + HAND Filter";
-                    tagDem.innerText = "DEM: Copernicus 30m";
+                } else {
+                    stepCounter.innerText = `Complete (${factsMode})`;
+                    tagSensor.innerText = hasS1Rasters ? "SAR: Live Downloaded" : "SAR: Catalog Matched";
+                    tagOnnx.innerText = currentFacts.flood?.method ? "Method: SAR Delineation" : "Method: Unassessed";
                 }
+
+                tagDem.innerText = demUsed ? "DEM: Copernicus 30m" : "DEM: Not Applied";
 
                 // Update Mode Banner
                 updateModeBanner(factsMode, currentFacts);
@@ -611,15 +639,23 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderJobResults(facts, minLng, minLat, maxLng, maxLat) {
         // Update Live HUD numbers directly from facts
         const floodArea = facts.flood?.flooded_area_km2 ?? 0;
-        const debrisArea = facts.debris?.debris_area_km2 ?? (facts.layers?.debris?.features ? (facts.layers.debris.features.length * 1.8).toFixed(1) : 0);
-        const exposedBuildings = facts.exposure?.buildings?.exposed_high ?? facts.exposure?.buildings_exposed_high ?? 0;
+        const isDebrisAssessed = facts.debris && facts.debris.status !== 'not_assessed' && facts.debris.debris_area_km2 != null;
+        const debrisArea = isDebrisAssessed ? facts.debris.debris_area_km2 : null;
+        const exposedBuildings = facts.exposure?.buildings?.exposed_high || facts.exposure?.buildings_exposed_high || (facts.layers?.buildings?.features ? facts.layers.buildings.features.length : 0);
 
         if (metricFloodVal) metricFloodVal.textContent = floodArea;
         else metricFloodArea.innerHTML = `${floodArea} <span class="unit">km²</span>`;
         metricBuildings.innerText = exposedBuildings;
         
         if (badgeFlood) badgeFlood.innerText = `${floodArea} km² Flood`;
-        if (badgeDebris) badgeDebris.innerText = `${debrisArea} km² Hazard`;
+        if (badgeDebris) {
+            if (isDebrisAssessed) {
+                badgeDebris.innerText = `${debrisArea} km² Hazard`;
+            } else {
+                badgeDebris.innerText = 'Debris: Not Assessed';
+                badgeDebris.title = 'Neural model classifies floodwater; debris scour is not assessed';
+            }
+        }
         if (badgeBuildings) badgeBuildings.innerText = `${exposedBuildings} Structures`;
 
         const layers = facts.layers || {};
@@ -815,15 +851,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const f = facts || currentFacts || {};
         const floodArea = f.flood?.flooded_area_km2 ?? 0;
-        const debrisArea = f.debris?.debris_area_km2 ?? (f.layers?.debris?.features ? (f.layers.debris.features.length * 1.8).toFixed(1) : 0);
-        const exposedBuildings = f.exposure?.buildings?.exposed_high ?? f.exposure?.buildings_exposed_high ?? 0;
+        const isDebrisAssessed = f.debris && f.debris.status !== 'not_assessed' && f.debris.debris_area_km2 != null;
+        const debrisText = isDebrisAssessed ? `${f.debris.debris_area_km2} km²` : 'Not Assessed (No AI debris class)';
+        const exposedBuildings = f.exposure?.buildings?.exposed_high || f.exposure?.buildings_exposed_high || (f.layers?.buildings?.features ? f.layers.buildings.features.length : 0);
         const exposedRoadsKm = f.exposure?.roads_km?.exposed_strict ?? f.exposure?.roads_km?.exposed ?? (f.exposure?.roads_exposed_length_m ? (f.exposure.roads_exposed_length_m / 1000).toFixed(1) : 0);
         const isolatedHamlets = f.cutoff?.isolated_settlements ?? (f.cutoff?.settlements ? f.cutoff.settlements.filter(s => s.status === 'isolated').length : 0);
 
         const elFlood = document.getElementById('expl-flood-val');
         if (elFlood) elFlood.innerText = `${floodArea} km²`;
         const elDebris = document.getElementById('expl-debris-val');
-        if (elDebris) elDebris.innerText = `${debrisArea} km²`;
+        if (elDebris) elDebris.innerText = debrisText;
         const elBld = document.getElementById('expl-bld-val');
         if (elBld) elBld.innerText = `${exposedBuildings}`;
         const elRoads = document.getElementById('expl-roads-val');
@@ -1432,7 +1469,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!loggerEntries) return;
 
         const filtered = allLogs.filter(log => {
-            const matchesCat = currentCategory === 'ALL' || (log.category && log.category.toUpperCase() === currentCategory);
+            const catUpper = (log.category || '').toUpperCase();
+            const matchesCat = currentCategory === 'ALL' || 
+                catUpper === currentCategory || 
+                catUpper.startsWith(currentCategory + ':') ||
+                catUpper.startsWith(currentCategory + '_') ||
+                (currentCategory === 'API' && catUpper.startsWith('API'));
             const matchesSearch = !searchQuery || 
                 (log.message && log.message.toLowerCase().includes(searchQuery)) ||
                 (log.event && log.event.toLowerCase().includes(searchQuery)) ||

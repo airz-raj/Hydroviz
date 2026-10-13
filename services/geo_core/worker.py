@@ -310,7 +310,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
         destination_node_ids.append("regional_terminus")
         graph_nodes.append("regional_terminus")
 
-    # Connect destinations to road network
+    # Connect destinations to road network and central hub
     if osm_roads:
         for d_node in destination_node_ids:
             graph_edges.append({
@@ -319,10 +319,17 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
                 "v": "junc_0_a",
                 "weight": 500.0
             })
+            graph_edges.append({
+                "id": f"conn_dest_hub_{d_node}",
+                "u": d_node,
+                "v": hub_node_id,
+                "weight": 800.0
+            })
 
-    # Connect road endpoints in close proximity (< 600m) to form network topology
-    for i in range(min(len(road_slice), 40)):
-        for j in range(i + 1, min(len(road_slice), i + 8)):
+    # Connect road endpoints in proximity (< 2500m) to form network topology
+    num_roads_to_check = min(len(road_slice), 60)
+    for i in range(num_roads_to_check):
+        for j in range(i + 1, min(num_roads_to_check, i + 15)):
             pi_a = road_slice[i]["coordinates"][0]
             pi_b = road_slice[i]["coordinates"][-1]
             pj_a = road_slice[j]["coordinates"][0]
@@ -330,7 +337,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
             for (pA, nA) in [(pi_a, f"junc_{i}_a"), (pi_b, f"junc_{i}_b")]:
                 for (pB, nB) in [(pj_a, f"junc_{j}_a"), (pj_b, f"junc_{j}_b")]:
                     d_m = math.hypot((pA[0] - pB[0]) * 111000.0 * math.cos(math.radians(mid_lat)), (pA[1] - pB[1]) * 111000.0)
-                    if d_m < 600.0:
+                    if d_m < 2500.0:
                         graph_edges.append({
                             "id": f"topo_link_{i}_{j}_{nA}_{nB}",
                             "u": nA,
@@ -491,7 +498,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
                 priority = "Low (Elevated / Safe)"
                 depth = "Dry Ground"
 
-            if in_flood or in_debris or near_flood or b_idx < 15:
+            if in_flood or in_debris or near_flood:
                 building_features.append({
                     "type": "Feature",
                     "geometry": {"type": "Point", "coordinates": [round(bx, 5), round(by, 5)]},
@@ -500,7 +507,8 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
                         "type": b_type,
                         "priority": priority,
                         "depth": depth,
-                        "osm_id": b.get("osm_id", b_idx)
+                        "osm_id": b.get("osm_id", b_idx),
+                        "exposure": "Direct Flood Inundation" if in_flood else ("Debris Risk" if in_debris else "Perimeter Alert")
                     }
                 })
         total_buildings = len(osm_buildings)
@@ -547,7 +555,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
     )
 
     target_buildings = facts.get("target_buildings_exposed")
-    if target_buildings is not None:
+    if exposed_high == 0 and not osm_buildings and target_buildings is not None:
         exposed_high = target_buildings
 
     facts["exposure"] = {

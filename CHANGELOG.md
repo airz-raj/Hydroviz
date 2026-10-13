@@ -4,6 +4,14 @@ All notable changes to the HydroViz project will be documented in this file.
 
 ## [2026-10-12]
 
+- **feat(telemetry-caching-and-basemap-refinement):**
+  - **Esri Dark Gray Basemap:** Switched "Dark Tactical" basemap from deprecated unauthenticated CartoDB endpoint to free public Esri World Dark Gray Canvas, eliminating API key watermark errors.
+  - **Dynamic Re-scan (Cache Bypass):** Removed `/jobs` cache return so every "Re-scan AOI" action re-executes the pipeline dynamically with fresh stage progression and metrics.
+  - **Natural DEM Valley Footprints:** Replaced preset geometric pill corridors with the dynamic Copernicus DEM valley thalweg generator (`build_fluid_valley_corridor`) across all regions.
+  - **Monotonic Telemetry Log Counter:** Switched `_system_logs` to an incrementing monotonic ID counter, preventing ID collisions and frontend activity stream freezes at the 1,000-log threshold.
+  - **Activity Console API Category Filtering:** Updated frontend logger matching so clicking `API` accurately captures `API:GET` and `API:POST` transactions.
+  - **Spatial Exposure & Cut-Off Routing:** Harmonized Exposed Buildings metrics with the map footprints and improved Dijkstra topology linkage for accurate isolation classification.
+
 - **feat(fluid-polygons-palette-and-real-d8-flow-routing):**
   - **Dynamic Preset Deselection:** Preset chips automatically deselect when custom coordinates are entered, maintaining clear visual state.
   - **Fluid Flood Extents:** Replaced rigid box footprints with organic, valley-contouring corridors using moving-average thalweg tracking and Chaikin subdivision smoothing.

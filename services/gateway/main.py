@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import uuid
 import hashlib
 import json
@@ -235,13 +236,37 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
                 "created_at": now,
                 "updated_at": now
             }
+
+        def update_stage_progress(msg: str, prog: float = None):
+            if job_id in _jobs:
+                _jobs[job_id]["message"] = msg
+                if prog is not None:
+                    _jobs[job_id]["progress"] = prog
+                _jobs[job_id]["updated_at"] = _now_iso()
+
         _jobs[job_id]["status"] = "ingesting"
         _jobs[job_id]["stage"] = "satellite_ingest"
-        _jobs[job_id]["progress"] = 0.2
+        _jobs[job_id]["progress"] = 0.05
+        _jobs[job_id]["message"] = "Initiating Sentinel-1 satellite ingest pipeline..."
         _jobs[job_id]["updated_at"] = _now_iso()
         
         log_system_event("satellite_ingest", f"Initiating Sentinel-1/2 ingest for job {job_id} on {request.event_date}", details={"bbox": request.bbox}, level="INFO", category="INGEST")
-        ingest_result = await process_ingest(job_id, request.bbox, request.event_date)
+        t_ingest_start = time.time()
+        try:
+            # Per-stage timeout of 360s (6 min) covers 3 satellite downloads + DEM without hanging indefinitely
+            ingest_result = await asyncio.wait_for(
+                process_ingest(job_id, request.bbox, request.event_date, status_cb=update_stage_progress),
+                timeout=360.0
+            )
+        except asyncio.TimeoutError:
+            err_msg = "Satellite ingestion timed out after 360s while acquiring Sentinel-1 rasters."
+            _jobs[job_id]["status"] = "failed"
+            _jobs[job_id]["stage"] = "satellite_ingest"
+            _jobs[job_id]["error"] = {"stage": "satellite_ingest", "message": err_msg}
+            _jobs[job_id]["message"] = err_msg
+            _jobs[job_id]["updated_at"] = _now_iso()
+            log_system_event("satellite_ingest", err_msg, level="ERROR", category="INGEST")
+            raise TimeoutError(err_msg)
         
         with open(facts_file, 'r', encoding='utf-8') as f:
             facts = json.load(f)
@@ -260,22 +285,50 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         # 2. Flood analysis / delineation
         _jobs[job_id]["status"] = "processing"
         _jobs[job_id]["stage"] = "flood_segmentation"
-        _jobs[job_id]["progress"] = 0.5
+        _jobs[job_id]["progress"] = 0.40
+        _jobs[job_id]["message"] = "Executing ONNX neural flood segmentation..."
         _jobs[job_id]["updated_at"] = _now_iso()
         
+        ts_onnx_start = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        print(f"[{ts_onnx_start}] [ONNX_INFERENCE_START] Initiating ONNX flood segmentation for job {job_id}")
         log_system_event("flood_segmentation", f"Starting ML flood delineation (INT8 ONNX model with HAND < {hand_threshold}m, slope < {steep_slope_deg}°)", details=facts.get("applied_thresholds"), level="INFO", category="ML")
-        ml_result = await process_m3_learned(job_id)
+        t_onnx_start = time.time()
+        try:
+            ml_result = await asyncio.wait_for(process_m3_learned(job_id), timeout=120.0)
+        except asyncio.TimeoutError:
+            err_msg = "Flood segmentation inference timed out after 120s."
+            _jobs[job_id]["status"] = "failed"
+            _jobs[job_id]["stage"] = "flood_segmentation"
+            _jobs[job_id]["error"] = {"stage": "flood_segmentation", "message": err_msg}
+            _jobs[job_id]["message"] = err_msg
+            _jobs[job_id]["updated_at"] = _now_iso()
+            raise TimeoutError(err_msg)
+
+        elapsed_onnx = time.time() - t_onnx_start
+        ts_onnx_end = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        print(f"[{ts_onnx_end}] [ONNX_INFERENCE_END] ONNX flood segmentation completed for job {job_id} in {elapsed_onnx:.2f}s (status={ml_result.get('status')}, flood_area_km2={ml_result.get('flooded_area_km2', 0.0)})")
+
         if ml_result.get("status") == "FAILED":
             raise RuntimeError(ml_result.get("error", "Flood delineation pipeline failed"))
         
         # 3. Geo Core exposure & cutoff analysis
         _jobs[job_id]["status"] = "analyzing"
         _jobs[job_id]["stage"] = "exposure_routing"
-        _jobs[job_id]["progress"] = 0.8
+        _jobs[job_id]["progress"] = 0.75
+        _jobs[job_id]["message"] = "Mapping OSM infrastructure and calculating route cutoffs..."
         _jobs[job_id]["updated_at"] = _now_iso()
         
         log_system_event("exposure_routing", f"Initiating OSM infrastructure mapping and multi-source Dijkstra routing", level="INFO", category="GEO")
-        geo_result = await process_m4_geo(job_id)
+        try:
+            geo_result = await asyncio.wait_for(process_m4_geo(job_id), timeout=90.0)
+        except asyncio.TimeoutError:
+            err_msg = "Exposure and routing analysis timed out after 90s."
+            _jobs[job_id]["status"] = "failed"
+            _jobs[job_id]["stage"] = "exposure_routing"
+            _jobs[job_id]["error"] = {"stage": "exposure_routing", "message": err_msg}
+            _jobs[job_id]["message"] = err_msg
+            _jobs[job_id]["updated_at"] = _now_iso()
+            raise TimeoutError(err_msg)
         
         # Load the updated facts written by workers
         with open(facts_file, 'r', encoding='utf-8') as f:
@@ -284,7 +337,8 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
         # 4. Generate Reports (EN and NE)
         _jobs[job_id]["status"] = "reporting"
         _jobs[job_id]["stage"] = "generating_reports"
-        _jobs[job_id]["progress"] = 0.9
+        _jobs[job_id]["progress"] = 0.90
+        _jobs[job_id]["message"] = "Compiling bilingual situation briefings (EN + NE)..."
         _jobs[job_id]["updated_at"] = _now_iso()
         
         log_system_event("report_generation", f"Generating bilingual SitRep briefings (EN + NE) with Devanagari Number Guard", level="INFO", category="REPORT")
@@ -301,29 +355,37 @@ async def _run_job_pipeline(job_id: str, request: JobRequest):
             _jobs[job_id]["stage"] = "partial"
             _jobs[job_id]["progress"] = 1.0
             _jobs[job_id]["message"] = facts.get("mode_description", "Partial results: pre-event infrastructure mapped; satellite scene unavailable.")
+        elif mode == "reference_case":
+            _jobs[job_id]["status"] = "reference_case"
+            _jobs[job_id]["stage"] = "reference_case"
+            _jobs[job_id]["progress"] = 1.0
+            _jobs[job_id]["message"] = facts.get("mode_description", "Curated Copernicus Sentinel-1 reference case loaded with EMSR927 validation.")
+        elif mode == "demo_simulated":
+            _jobs[job_id]["status"] = "demo_simulated"
+            _jobs[job_id]["stage"] = "demo_simulated"
+            _jobs[job_id]["progress"] = 1.0
+            _jobs[job_id]["message"] = facts.get("mode_description", "Physics-conditioned topographic simulation using Copernicus DEM completed.")
         else:
             _jobs[job_id]["status"] = "complete"
             _jobs[job_id]["stage"] = "complete"
             _jobs[job_id]["progress"] = 1.0
-            if mode == "reference_case":
-                _jobs[job_id]["message"] = facts.get("mode_description", "Curated Copernicus Sentinel-1 reference case loaded with EMSR927 validation.")
-            elif mode == "demo_simulated":
-                _jobs[job_id]["message"] = facts.get("mode_description", "Physics-conditioned topographic simulation using Copernicus DEM completed.")
-            else:
-                _jobs[job_id]["message"] = "Live Sentinel-1 satellite analysis completed successfully"
+            _jobs[job_id]["message"] = facts.get("mode_description", "Live Sentinel-1 satellite analysis completed successfully")
 
         _jobs[job_id]["mode"] = mode
         _jobs[job_id]["updated_at"] = _now_iso()
-        log_system_event("job_complete", f"Pipeline completed for job {job_id} (mode={mode})", details={"job_id": job_id, "mode": mode}, level="SUCCESS", category="SYSTEM")
+        log_system_event("job_complete", f"Pipeline finished for job {job_id} (mode={mode})", details={"job_id": job_id, "mode": mode}, level="SUCCESS", category="SYSTEM")
         
     except Exception as e:
         if job_id not in _jobs:
             _jobs[job_id] = {"job_id": job_id}
         _jobs[job_id]["status"] = "failed"
+        curr_stage = _jobs[job_id].get("stage", "unknown")
         import traceback
-        _jobs[job_id]["error"] = {"message": str(e), "trace": traceback.format_exc()}
+        err_str = str(e)
+        _jobs[job_id]["error"] = {"stage": curr_stage, "message": err_str, "trace": traceback.format_exc()}
+        _jobs[job_id]["message"] = f"Failed in stage '{curr_stage}': {err_str}"
         _jobs[job_id]["updated_at"] = _now_iso()
-        log_system_event("job_failed", f"Pipeline error for job {job_id}: {str(e)}", details={"error": str(e)}, level="ERROR", category="SYSTEM")
+        log_system_event("job_failed", f"Pipeline error for job {job_id} in stage '{curr_stage}': {err_str}", details={"stage": curr_stage, "error": err_str}, level="ERROR", category="SYSTEM")
 
 @app.get("/health")
 def health_check():
@@ -345,21 +407,6 @@ def _run_pipeline_thread(job_id: str, request: JobRequest):
 def create_job(request: JobRequest):
     request_hash = _generate_job_hash(request)
     data_dir = _get_data_dir()
-
-    # Check if identical job was previously run and has completed
-    if request_hash in _hash_to_job:
-        cached_id = _hash_to_job[request_hash]
-        cached_job = _jobs.get(cached_id)
-        facts_path = os.path.join(data_dir, "jobs", cached_id, "facts.json")
-        if (cached_job and cached_job.get("status") in ["complete", "partial"]) or os.path.exists(facts_path):
-            log_system_event("job_cache_hit", f"Identical job found in cache: {cached_id}", details={"cached_job_id": cached_id}, level="INFO", category="API")
-            return {
-                "job_id": cached_id,
-                "status": "complete",
-                "stage": "complete",
-                "progress": 1.0,
-                "message": "Returned from cache"
-            }
 
     now = _now_iso()
     job_id = request.job_id or str(uuid.uuid4())
@@ -576,11 +623,44 @@ def get_job_status(job_id: str):
         facts_file = os.path.join(data_dir, "jobs", job_id, "facts.json")
         if os.path.exists(facts_file):
             now = _now_iso()
+            try:
+                with open(facts_file, "r", encoding="utf-8") as f:
+                    saved_facts = json.load(f)
+                f_mode = saved_facts.get("mode", "unknown")
+                f_desc = saved_facts.get("mode_description", "")
+            except Exception:
+                f_mode = "unknown"
+                f_desc = ""
+
+            # Truthfully reflect mode; do not report as live-complete merely because facts file exists
+            if f_mode == "partial":
+                job_status = "partial"
+                job_stage = "partial"
+                msg = f_desc or "Partial results: pre-event infrastructure mapped; satellite scene unavailable."
+            elif f_mode == "reference_case":
+                job_status = "reference_case"
+                job_stage = "reference_case"
+                msg = f_desc or "Archived curated reference case."
+            elif f_mode == "demo_simulated":
+                job_status = "demo_simulated"
+                job_stage = "demo_simulated"
+                msg = f_desc or "Archived topographic demonstration simulation."
+            elif f_mode == "live_inferred":
+                job_status = "complete"
+                job_stage = "complete"
+                msg = f_desc or "Archived live satellite delineation."
+            else:
+                job_status = "complete"
+                job_stage = "complete"
+                msg = f_desc or "Archived job data."
+
             return {
                 "job_id": job_id,
-                "status": "complete",
-                "stage": "complete",
+                "status": job_status,
+                "stage": job_stage,
+                "mode": f_mode,
                 "progress": 1.0,
+                "message": msg,
                 "stages": {},
                 "partial_results": {},
                 "error": None,
@@ -631,19 +711,23 @@ def get_case_study_emsr927():
         "event_date": "2026-08-26",
         "copernicus_ems_url": "https://mapping.emergency.copernicus.eu/activations/EMSR927",
         "attribution": "European Union, Copernicus Emergency Management Service data (EMSR927)",
+        "validation_status": "unavailable",
         "metrics": {
-            "iou": 0.74,
-            "f1_score": 0.82,
-            "precision": 0.79,
-            "recall": 0.86
+            "status": "unavailable",
+            "iou": None,
+            "f1_score": None,
+            "precision": None,
+            "recall": None
         },
         "exposure_comparison": {
-            "hydroviz_exposed_buildings": 89,
+            "status": "unavailable",
+            "hydroviz_exposed_buildings": None,
             "emsr927_damaged_buildings": 80,
-            "hydroviz_severed_roads_km": 1.7,
+            "hydroviz_severed_roads_km": None,
             "emsr927_blocked_roads_km": 2.1,
-            "hydroviz_likely_damaged_bridges": 1,
-            "emsr927_damaged_bridges": 1
+            "hydroviz_likely_damaged_bridges": None,
+            "emsr927_damaged_bridges": 1,
+            "note": "Measured automated validation metrics unavailable; no verified ground-truth reference raster ingested."
         },
         "methodology_notes": [
             "Resolution & Sensor: HydroViz uses 10m Sentinel-1 dual-pol SAR (VV/VH) specular drop conditioned on Copernicus DEM HAND (<15m) and slope (<20 deg), whereas EMSR927 relies on post-event VHR optical photo-interpretation.",
