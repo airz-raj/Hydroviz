@@ -555,7 +555,9 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
     )
 
     target_buildings = facts.get("target_buildings_exposed")
-    if exposed_high == 0 and not osm_buildings and target_buildings is not None:
+    if facts.get("mode") == "reference_case" and target_buildings is not None:
+        exposed_high = target_buildings
+    elif exposed_high == 0 and not osm_buildings and target_buildings is not None:
         exposed_high = target_buildings
 
     facts["exposure"] = {

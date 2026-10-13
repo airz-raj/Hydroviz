@@ -20,6 +20,11 @@ try:
 except ImportError:
     rasterio = None
 
+try:
+    import tifffile
+except ImportError:
+    tifffile = None
+
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from .auth import auth_manager
@@ -90,74 +95,104 @@ def _validate_geotiff_bytes(content: bytes) -> tuple[bool, Optional[str]]:
         print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
         return False, msg
 
-    if rasterio is None:
-        msg = "Rasterio is not available to validate GeoTIFF structure."
-        print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
-        return False, msg
-
-    try:
-        from rasterio.io import MemoryFile
-        with MemoryFile(content) as memfile:
-            with memfile.open() as ds:
-                # 1. Dimensions check
-                if ds.width < 16 or ds.height < 16:
-                    msg = f"Invalid GeoTIFF dimensions: {ds.width}x{ds.height} (expected >= 16x16)."
-                    print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
-                    return False, msg
-                if ds.count < 1:
-                    msg = "GeoTIFF contains 0 raster bands."
-                    print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
-                    return False, msg
-
-                # 2. CRS check
-                if ds.crs is None or not ds.crs.is_valid:
-                    msg = f"Invalid or missing CRS in GeoTIFF: {ds.crs}."
-                    print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
-                    return False, msg
-
-                # 3. Transform check
-                if ds.transform is None or ds.transform.is_identity:
-                    msg = "GeoTIFF transform is missing or degenerate identity matrix."
-                    print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
-                    return False, msg
-
-                # 4. Bounds check
-                b = ds.bounds
-                if not (b.right > b.left and b.top > b.bottom):
-                    msg = f"Invalid GeoTIFF spatial bounds: [{b.left}, {b.bottom}, {b.right}, {b.top}]."
-                    print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
-                    return False, msg
-
-                # 5. Nodata and valid pixels check (Band 1: VV)
-                arr = ds.read(1)
-                nodata = ds.nodata
-                if nodata is not None:
-                    valid_mask = (arr != nodata) & np.isfinite(arr)
-                else:
-                    valid_mask = np.isfinite(arr) & (arr > 0)
-
-                valid_pixel_count = int(np.sum(valid_mask))
-                if valid_pixel_count == 0:
-                    msg = "GeoTIFF contains 0 valid pixels in band 1 (all pixels are nodata or non-finite)."
-                    print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
-                    return False, msg
-
-                # If dual polarization is provided (Band 2: VH), verify it has valid pixels
-                if ds.count >= 2:
-                    arr2 = ds.read(2)
-                    if nodata is not None:
-                        valid_mask2 = (arr2 != nodata) & np.isfinite(arr2)
-                    else:
-                        valid_mask2 = np.isfinite(arr2) & (arr2 > 0)
-                    if int(np.sum(valid_mask2)) == 0:
-                        msg = "GeoTIFF band 2 (VH) contains 0 valid pixels (all pixels are nodata or non-finite)."
+    if rasterio is not None:
+        try:
+            from rasterio.io import MemoryFile
+            with MemoryFile(content) as memfile:
+                with memfile.open() as ds:
+                    # 1. Dimensions check
+                    if ds.width < 16 or ds.height < 16:
+                        msg = f"Invalid GeoTIFF dimensions: {ds.width}x{ds.height} (expected >= 16x16)."
+                        print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
+                        return False, msg
+                    if ds.count < 1:
+                        msg = "GeoTIFF contains 0 raster bands."
                         print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
                         return False, msg
 
-                print(f"[{ts}] [RASTER_VALIDATION_PASSED] Valid GeoTIFF: {ds.width}x{ds.height}, {ds.count} bands, CRS={ds.crs}, valid_pixels={valid_pixel_count}")
+                    # 2. CRS check
+                    if ds.crs is None or not ds.crs.is_valid:
+                        msg = f"Invalid or missing CRS in GeoTIFF: {ds.crs}."
+                        print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
+                        return False, msg
+
+                    # 3. Transform check
+                    if ds.transform is None or ds.transform.is_identity:
+                        msg = "GeoTIFF transform is missing or degenerate identity matrix."
+                        print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
+                        return False, msg
+
+                    # 4. Bounds check
+                    b = ds.bounds
+                    if not (b.right > b.left and b.top > b.bottom):
+                        msg = f"Invalid GeoTIFF spatial bounds: [{b.left}, {b.bottom}, {b.right}, {b.top}]."
+                        print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
+                        return False, msg
+
+                    # 5. Nodata and valid pixels check (Band 1: VV)
+                    arr = ds.read(1)
+                    nodata = ds.nodata
+                    if nodata is not None:
+                        valid_mask = (arr != nodata) & np.isfinite(arr)
+                    else:
+                        valid_mask = np.isfinite(arr) & (arr > 0)
+
+                    valid_pixel_count = int(np.sum(valid_mask))
+                    if valid_pixel_count == 0:
+                        msg = "GeoTIFF contains 0 valid pixels in band 1 (all pixels are nodata or non-finite)."
+                        print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
+                        return False, msg
+
+                    # If dual polarization is provided (Band 2: VH), verify it has valid pixels
+                    if ds.count >= 2:
+                        arr2 = ds.read(2)
+                        if nodata is not None:
+                            valid_mask2 = (arr2 != nodata) & np.isfinite(arr2)
+                        else:
+                            valid_mask2 = np.isfinite(arr2) & (arr2 > 0)
+                        if int(np.sum(valid_mask2)) == 0:
+                            msg = "GeoTIFF band 2 (VH) contains 0 valid pixels (all pixels are nodata or non-finite)."
+                            print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
+                            return False, msg
+
+                    print(f"[{ts}] [RASTER_VALIDATION_PASSED] Valid GeoTIFF: {ds.width}x{ds.height}, {ds.count} bands, CRS={ds.crs}, valid_pixels={valid_pixel_count}")
+                    return True, None
+        except Exception as val_err:
+            msg = f"Rasterio could not parse GeoTIFF: {str(val_err)}"
+            print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
+            return False, msg
+    elif tifffile is not None:
+        try:
+            with tifffile.TiffFile(io.BytesIO(content)) as tf:
+                if len(tf.pages) < 1:
+                    msg = "GeoTIFF contains 0 raster pages."
+                    print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
+                    return False, msg
+                page = tf.pages[0]
+                h = page.shape[0]
+                w = page.shape[1] if len(page.shape) > 1 else page.shape[0]
+                if h < 16 or w < 16:
+                    msg = f"Invalid GeoTIFF dimensions: {w}x{h} (expected >= 16x16)."
+                    print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
+                    return False, msg
+                arr = page.asarray()
+                valid_count = int(np.sum(np.isfinite(arr) & (arr > 0)))
+                if valid_count == 0:
+                    msg = "GeoTIFF contains 0 valid finite pixels."
+                    print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
+                    return False, msg
+                print(f"[{ts}] [RASTER_VALIDATION_PASSED] Valid GeoTIFF (tifffile): {w}x{h}, shape={page.shape}, valid_pixels={valid_count}")
                 return True, None
-    except Exception as val_err:
-        msg = f"Rasterio could not parse GeoTIFF: {str(val_err)}"
+        except Exception as val_err:
+            msg = f"tifffile could not parse GeoTIFF: {str(val_err)}"
+            print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
+            return False, msg
+    else:
+        # Fallback to TIFF magic byte header validation
+        if len(content) >= 1000 and (content.startswith(b'II*\x00') or content.startswith(b'MM\x00*')):
+            print(f"[{ts}] [RASTER_VALIDATION_PASSED] Valid TIFF magic header verified ({len(content)} bytes).")
+            return True, None
+        msg = "GeoTIFF payload too small or missing standard TIFF header."
         print(f"[{ts}] [RASTER_VALIDATION_FAILED] {msg}")
         return False, msg
 

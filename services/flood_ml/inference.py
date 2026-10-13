@@ -176,11 +176,12 @@ class FloodInferenceONNX:
 
         return tensor_9ch
 
-    def _sliding_window_inference(self, tile_data: np.ndarray, window_size: int = 256, step: int = 128) -> np.ndarray:
+    def _sliding_window_inference(self, tile_data: np.ndarray, window_size: int = 256, step: int = 128, return_probs: bool = False) -> np.ndarray:
         """
         Runs sliding window inference over a multi-channel tensor.
         Uses Gaussian weighting to blend overlapping predictions.
-        Returns out_probs array of shape (num_classes, H, W).
+        If return_probs is True, returns out_probs array of shape (num_classes, H, W).
+        If return_probs is False (default), returns argmax class prediction array of shape (H, W).
         """
         c, h, w = tile_data.shape
 
@@ -232,7 +233,9 @@ class FloodInferenceONNX:
         # Crop back to original unpadded size
         out_probs = out_probs[:, :h, :w]
 
-        return out_probs
+        if return_probs:
+            return out_probs
+        return np.argmax(out_probs, axis=0)
 
     def predict(
         self,
@@ -275,7 +278,7 @@ class FloodInferenceONNX:
             valid_mask=valid_mask
         )
 
-        probs = self._sliding_window_inference(tensor_9ch, window_size=window_size, step=step)
+        probs = self._sliding_window_inference(tensor_9ch, window_size=window_size, step=step, return_probs=True)
         pred_classes = np.argmax(probs, axis=0)
 
         if self.num_classes == 3:
