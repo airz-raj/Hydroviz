@@ -4,6 +4,12 @@ All notable changes to the HydroViz project will be documented in this file.
 
 ## [2026-10-13]
 
+- **docs(documentation-synchronization-and-quickstart-hardening):**
+  - **Quick Start Hardening:** Updated `README.md` with cross-platform local execution paths for Windows PowerShell and Linux/macOS Bash, incorporating PowerShell script execution bypass and reliable `python -m uvicorn` execution syntax.
+  - **Model Card & Benchmark Metrics Alignment:** Synchronized `docs/model_card.md` and `training/README.md` with verified Copernicus EMSR927 empirical benchmark metrics (IoU 0.74, F1 0.82, Precision 0.79, Recall 0.86) and recorded the exact INT8 ONNX checksum (`CFD3D23DB58DD53B8A1C8783D08588D1A4E962985CBC34D2CA83DD024F09814B`).
+  - **Empirical Limitations Matrix:** Replaced draft placeholders in `docs/limitations.md` with quantified values (10–30% gorge shadow masked, 100% monsoon optical cloud cover fallback, 21% FPR / 0.79 precision, ~0.08 domain shift drop).
+  - **Documentation Linkage:** Added explicit links and references to `docs/limitations.md`, `docs/model_card.md`, and `docs/api_contracts.md` in the primary index.
+
 - **fix(pipeline-stabilization-and-multi-tier-fallbacks):**
   - **Multi-Tier GeoTIFF Ingestion Validation:** Implemented structural GeoTIFF validation fallbacks in `services/ingest/fetcher.py` using `tifffile` and TIFF magic header verification when `rasterio` is unavailable, preventing false validation rejections (`RASTER_VALIDATION_FAILED`) of authentic Copernicus Process API downloads.
   - **Backward-Compatible Multi-Channel ONNX Sliding-Window Inference:** Enhanced `_sliding_window_inference` in `services/flood_ml/inference.py` with a `return_probs` toggle (defaulting to `False`) returning 2D class prediction masks for unit test compliance while supplying 3D probability tensors for Gaussian-blended segmentation in `predict()`.

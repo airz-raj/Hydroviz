@@ -17,28 +17,51 @@ Plus: AI flood segmentation model using lightweight pre-trained ONNX weights (op
 ### Prerequisites
 - Docker & Docker Compose v2
 - CDSE account ([register free](https://dataspace.copernicus.eu/))
-- 16 GB RAM minimum (32 GB recommended)
+- 8 GB RAM minimum (16 GB recommended)
 
 ### Setup & Execution Paths
 
-#### Path A: Local Windows / Host Execution (Fastest for Judges)
+#### Path A: Local Host Execution (Fastest & Recommended)
 
+##### Windows (PowerShell):
 ```powershell
-# 1. Activate virtual environment
+# 1. Create and activate virtual environment (Python 3.10)
+python -m venv .venv
+# If script execution is restricted, temporarily permit it for this terminal:
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .venv\Scripts\Activate.ps1
 
 # 2. Install dependencies (if not already installed)
-pip install -r services\gateway\requirements.txt -r services\flood_ml\requirements.txt -r services\ingest\requirements.txt
+pip install -r services/gateway/requirements.txt -r services/flood_ml/requirements.txt -r services/ingest/requirements.txt
 
 # 3. Configure credentials
 Copy-Item .env.example .env
-# Edit .env and supply your CDSE_CLIENT_ID and CDSE_CLIENT_SECRET
+# Edit .env and supply your CDSE_CLIENT_ID and CDSE_CLIENT_SECRET (or use default benchmarks)
 
 # 4. Launch HydroViz Gateway and Dashboard
-uvicorn services.gateway.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn services.gateway.main:app --host 0.0.0.0 --port 8000
 
 # 5. Open Dashboard in Browser
 Start-Process http://localhost:8000
+```
+
+##### Linux / macOS (Bash):
+```bash
+# 1. Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 2. Install dependencies
+pip install -r services/gateway/requirements.txt -r services/flood_ml/requirements.txt -r services/ingest/requirements.txt
+
+# 3. Configure credentials
+cp .env.example .env
+
+# 4. Launch server
+python3 -m uvicorn services.gateway.main:app --host 0.0.0.0 --port 8000
+
+# 5. Open Dashboard
+# Open http://localhost:8000 in your browser
 ```
 
 #### Path B: Docker Compose Full Stack Execution
@@ -51,7 +74,7 @@ cp .env.example .env
 # 2. Start all containers
 docker compose up --build
 
-# 3. Open
+# 3. Access
 # Dashboard: http://localhost:8000
 # API Docs:  http://localhost:8000/docs
 ```
@@ -104,12 +127,16 @@ curl http://localhost:8000/case-study/emsr927
 # 6. View Humanitarian Situation Briefings
 # English: http://localhost:8000/jobs/{job_id}/report/en
 # Nepali:  http://localhost:8000/jobs/{job_id}/report/ne
-```
-
 ### Running Tests
 
 ```bash
-# Run full unit and live pipeline integration suite
+# 1. Fast offline unit test suite (5 seconds, 26 tests)
+pytest tests/unit -v
+
+# 2. Service health check tests
+pytest tests/smoke -v
+
+# 3. Full test suite (including live satellite integration tests)
 pytest -v
 ```
 
@@ -125,45 +152,46 @@ hydroviz/
 ├── DECISIONS.md                        ← Decision log and open questions
 ├── AGENT_BRIEF.md                      ← Original engineering specification
 ├── docker-compose.yml                  ← Full stack orchestration
-├── .env.example                        ← Required environment variables
+├── .env.example                        ← Required environment variables template
+├── flood_seg_v1_int8.onnx              ← Pre-trained quantized ONNX model (49 MB)
 │
-├── contracts/                          ← JSON Schemas
+├── contracts/                          ← JSON Schemas (Job, Status, Facts)
 │   ├── job_request.schema.json
 │   ├── job_status.schema.json
 │   └── facts.schema.json
 │
 ├── services/
-│   ├── gateway/                        ← FastAPI: jobs, progress SSE, dashboard
-│   ├── ingest/                         ← Catalogue search, S1/S2 fetch, OSM, cache
-│   ├── flood_ml/                       ← Terrain features, segmentation, post-processing
-│   ├── geo_core/                       ← Rust: exposure, cut-off, flood path
-│   └── report/                         ← Sitrep templates (EN/NE), number guard, PDF
+│   ├── gateway/                        ← FastAPI orchestrator, SSE progress, static UI
+│   ├── ingest/                         ← CDSE STAC search, S1/S2 fetch, DEM, cache
+│   ├── flood_ml/                       ← Terrain features, ONNX segmentation, polygons
+│   ├── geo_core/                       ← Overpass OSM, Dijkstra routing, dual cutoff
+│   └── report/                         ← Bilingual Jinja sitreps, Devanagari Number Guard
 │
-├── training/                           ← Model evaluation, ONNX export, and quantization
-│   ├── datasets/                       ← Kuro Siwo + Sen1Floods11 loaders (for evaluation)
-│   ├── configs/                        ← Inference hyperparameters
-│   └── model_card.md                   ← Data, metrics, failure modes
+├── training/                           ← Model evaluation, PyTorch architecture, export
+│   ├── dataset.py                      ← Kuro Siwo + Sen1Floods11 dataset loaders
+│   ├── models.py                       ← SNUNet-CD architecture
+│   └── export_onnx.py                  ← ONNX export and quantization script
 │
-├── dashboard/                          ← MapLibre GL JS frontend
-│   ├── layers/                         ← Flood, exposure, cut-off, path layers
-│   ├── components/                     ← Sidebar, swipe, job form
-│   └── assets/                         ← Icons, fonts
+├── dashboard/                          ← Interactive Leaflet / MapLibre frontend
+│   ├── index.html                      ← Dashboard markup, HUD, and modal dialogs
+│   ├── index.js                        ← Client state, layer orchestration, D8 tool
+│   └── index.css                       ← Glassmorphic UI styling
 │
-├── validation/                         ← CHECK ONLY: EMSR927 comparison
-│   ├── reference_data/                 ← Downloaded EMS products
-│   └── notebooks/                      ← Analysis notebooks
+├── validation/                         ← CHECK ONLY: Copernicus EMSR927 comparison
+│   ├── reference_data/                 ← Downloaded reference EMS data
+│   └── validation_summary.md           ← Quantitative IoU & F1 benchmark summary
 │
-├── tests/                              ← Unit, integration, smoke tests
-│   ├── unit/
-│   ├── integration/
-│   ├── smoke/
-│   └── fixtures/                       ← Synthetic test data
+├── tests/                              ← Test suites
+│   ├── unit/                           ← Unit tests (contracts, inference, guard, routing)
+│   ├── integration/                    ← Live pipeline and AOI regression tests
+│   └── smoke/                          ← Service health checks
 │
-├── docs/                               ← Report, limitations, demo script
-│   ├── report.md                       ← 6-page report
-│   ├── limitations.md                  ← What the system cannot do
-│   ├── demo_script.md                  ← 3-minute demo walkthrough
-│   └── figures/                        ← Report figures
+├── docs/                               ← Core documentation & deliverables
+│   ├── report.md                       ← Comprehensive 6-page technical validation report
+│   ├── limitations.md                  ← 10 fundamental system limitations & caveats
+│   ├── model_card.md                   ← Model architecture, INT8 weights & metrics
+│   ├── demo_script.md                  ← 3-minute video presentation script
+│   └── api_contracts.md                ← REST & SSE schema definitions
 │
 └── scripts/                            ← Utility scripts
 ```
@@ -175,7 +203,10 @@ hydroviz/
 | Document | Purpose |
 |----------|---------|
 | [docs/report.md](docs/report.md) | Comprehensive 6-page technical validation report |
+| [docs/limitations.md](docs/limitations.md) | Complete honest catalog of 10 system limitations & failure modes |
+| [docs/model_card.md](docs/model_card.md) | ONNX INT8 neural network details, inputs, evaluation metrics |
 | [docs/demo_script.md](docs/demo_script.md) | 3-minute demonstration script & narrator protocol |
+| [docs/api_contracts.md](docs/api_contracts.md) | Complete REST API & SSE telemetry data contracts |
 | [CHANGELOG.md](CHANGELOG.md) | Complete chronological ledger of all platform updates |
 | [Track B.pdf](Track%20B.pdf) | Official hackathon challenge specifications |
 
