@@ -23,7 +23,7 @@ Plus: AI flood segmentation model using lightweight pre-trained ONNX weights (op
 
 #### Path A: Local Host Execution (Fastest & Recommended)
 
-##### Windows (PowerShell):
+##### Windows (run this in PowerShell):
 ```powershell
 # 1. Create and activate virtual environment (Python 3.10)
 python -m venv .venv
@@ -31,8 +31,8 @@ python -m venv .venv
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .venv\Scripts\Activate.ps1
 
-# 2. Install dependencies (if not already installed)
-pip install -r services/gateway/requirements.txt -r services/flood_ml/requirements.txt -r services/ingest/requirements.txt
+# 2. Install dependencies (single unified command)
+pip install -r requirements.txt
 
 # 3. Configure credentials
 Copy-Item .env.example .env
@@ -51,8 +51,8 @@ Start-Process http://localhost:8000
 python3 -m venv .venv
 source .venv/bin/activate
 
-# 2. Install dependencies
-pip install -r services/gateway/requirements.txt -r services/flood_ml/requirements.txt -r services/ingest/requirements.txt
+# 2. Install dependencies (single unified command)
+pip install -r requirements.txt
 
 # 3. Configure credentials
 cp .env.example .env
@@ -147,6 +147,7 @@ pytest -v
 ```
 hydroviz/
 ├── README.md                           ← You are here
+├── requirements.txt                    ← Unified dependencies for one-step installation
 ├── ARCHITECTURE.md                     ← System design, data flow, schemas
 ├── IMPLEMENTATION_PLAN.md              ← Step-by-step build guide (M0–M8)
 ├── DECISIONS.md                        ← Decision log and open questions

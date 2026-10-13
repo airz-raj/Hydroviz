@@ -4,7 +4,10 @@ import json
 import math
 import asyncio
 import numpy as np
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 
 # In Docker, shared module is mounted at /shared
 sys.path.insert(0, '/shared')

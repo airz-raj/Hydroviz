@@ -4,6 +4,11 @@ All notable changes to the HydroViz project will be documented in this file.
 
 ## [2026-10-13]
 
+- **fix(resilient-dependencies-and-cv2-fallback):**
+  - **Unified Root Requirements:** Added root `requirements.txt` containing all unified dependencies across gateway, flood_ml, geo_core, and ingest to guarantee seamless one-step installation (`pip install -r requirements.txt`) on clean clones.
+  - **Service Requirements Harmonization:** Explicitly included `opencv-python-headless` and `shapely` across `services/flood_ml/requirements.txt`, `services/geo_core/requirements.txt`, and `services/gateway/requirements.txt`.
+  - **Resilient Point-in-Polygon Fallback:** Wrapped `cv2` imports in safe `try/except` with graceful fallbacks to `shapely` (`Polygon.contains`) and ray-casting in `services/geo_core/worker.py` and `services/flood_ml/workers.py`, eliminating `ModuleNotFoundError: No module named 'cv2'`.
+
 - **docs(documentation-synchronization-and-quickstart-hardening):**
   - **Quick Start Hardening:** Updated `README.md` with cross-platform local execution paths for Windows PowerShell and Linux/macOS Bash, incorporating PowerShell script execution bypass and reliable `python -m uvicorn` execution syntax.
   - **Model Card & Benchmark Metrics Alignment:** Synchronized `docs/model_card.md` and `training/README.md` with verified Copernicus EMSR927 empirical benchmark metrics (IoU 0.74, F1 0.82, Precision 0.79, Recall 0.86) and recorded the exact INT8 ONNX checksum (`CFD3D23DB58DD53B8A1C8783D08588D1A4E962985CBC34D2CA83DD024F09814B`).

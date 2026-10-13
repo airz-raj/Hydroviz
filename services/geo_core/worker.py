@@ -2,8 +2,40 @@ import os
 import sys
 import json
 import math
-import cv2
 import numpy as np
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
+def _point_poly_test(poly_pts, pt, measure_dist=False):
+    if cv2 is not None:
+        cv_poly = np.array(poly_pts, dtype=np.float32)
+        return cv2.pointPolygonTest(cv_poly, pt, measure_dist)
+    try:
+        from shapely.geometry import Point, Polygon
+        p = Point(pt[0], pt[1])
+        poly = Polygon(poly_pts)
+        if measure_dist:
+            dist = poly.exterior.distance(p)
+            return dist if poly.contains(p) else -dist
+        return 1.0 if poly.contains(p) else (-1.0 if not poly.touches(p) else 0.0)
+    except Exception:
+        x, y = pt
+        n = len(poly_pts)
+        inside = False
+        p1x, p1y = poly_pts[0]
+        for i in range(n + 1):
+            p2x, p2y = poly_pts[i % n]
+            if y > min(p1y, p2y):
+                if y <= max(p1y, p2y):
+                    if x <= max(p1x, p2x):
+                        if p1y != p2y:
+                            xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                        if p1x == p2x or x <= xinters:
+                            inside = not inside
+            p1x, p1y = p2x, p2y
+        return 1.0 if inside else -1.0
 
 # Ensure shared modules are accessible
 sys.path.insert(0, '/shared')
@@ -75,8 +107,7 @@ def check_road_intersection(road_coords, polys):
             for poly_pts in polys:
                 if len(poly_pts) < 3:
                     continue
-                cv_poly = np.array(poly_pts, dtype=np.float32)
-                dist = cv2.pointPolygonTest(cv_poly, pt, False)
+                dist = _point_poly_test(poly_pts, pt, False)
                 if dist >= 0:
                     inside = True
                     break
@@ -279,8 +310,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
             is_dmg = False
             for poly_pts in flood_polys:
                 if len(poly_pts) >= 3:
-                    cv_poly = np.array(poly_pts, dtype=np.float32)
-                    dist = cv2.pointPolygonTest(cv_poly, b_pt, True)
+                    dist = _point_poly_test(poly_pts, b_pt, True)
                     if dist >= -0.0035:
                         is_dmg = True
                         break
@@ -460,8 +490,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
             in_flood = False
             for poly_pts in flood_polys:
                 if len(poly_pts) >= 3:
-                    cv_poly = np.array(poly_pts, dtype=np.float32)
-                    if cv2.pointPolygonTest(cv_poly, b_pt, False) >= 0:
+                    if _point_poly_test(poly_pts, b_pt, False) >= 0:
                         in_flood = True
                         break
 
@@ -469,8 +498,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
             if not in_flood:
                 for poly_pts in debris_polys:
                     if len(poly_pts) >= 3:
-                        cv_poly = np.array(poly_pts, dtype=np.float32)
-                        if cv2.pointPolygonTest(cv_poly, b_pt, False) >= 0:
+                        if _point_poly_test(poly_pts, b_pt, False) >= 0:
                             in_debris = True
                             break
 
@@ -478,8 +506,7 @@ async def process_m4_geo(job_id: str, mask_path: str = "", osm_buildings: str = 
             if not in_flood and not in_debris:
                 for poly_pts in flood_polys:
                     if len(poly_pts) >= 3:
-                        cv_poly = np.array(poly_pts, dtype=np.float32)
-                        if cv2.pointPolygonTest(cv_poly, b_pt, True) >= -0.001:
+                        if _point_poly_test(poly_pts, b_pt, True) >= -0.001:
                             near_flood = True
                             break
 
